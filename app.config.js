@@ -30,13 +30,7 @@ export default {
       bundler: "metro"
     },
     plugins: [
-      "expo-router",
-      [
-        "expo-dev-client",
-        {
-          "addGeneratedScheme": false
-        }
-      ]
+      "expo-router"
     ],
     experiments: {
       typedRoutes: true
