@@ -1,8 +1,7 @@
 import React from 'react';
-import { View } from 'react-native';
+import { View, useWindowDimensions } from 'react-native';
 import { Avatar } from '@/components/Avatar';
 import { Colors } from '@/constants/Colors';
-import { useWindowDimensions } from 'react-native';
 import { useAuthStore } from '@/hooks/useAuthStore';
 
 export default function HomeScreen() {
@@ -17,7 +16,6 @@ export default function HomeScreen() {
         name={user?.displayName || user?.email} 
         size={isTablet ? "large" : "medium"} 
       />
-      {/* Rest of your component */}
     </View>
   );
 }

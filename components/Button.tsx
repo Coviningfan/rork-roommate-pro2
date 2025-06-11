@@ -1,2 +1,11 @@
+import React from 'react';
+import { TouchableOpacity, Text, StyleSheet } from 'react-native';
 import { Colors } from '@/constants/Colors';
-// ... rest of the file
+
+export function Button() {
+  return (
+    <TouchableOpacity>
+      <Text>Button</Text>
+    </TouchableOpacity>
+  );
+}

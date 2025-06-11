@@ -10,4 +10,20 @@ import { spacing, borderRadius } from '@/constants/design-system';
 import { Trash2 } from 'lucide-react-native';
 import { useHaptics } from '@/hooks/useHaptics';
 
-// ... rest of the file remains the same, just update Colors usage
+interface SwipeableRowProps {
+  children: ReactNode;
+  onDelete?: () => void;
+}
+
+export function SwipeableRow({ children, onDelete }: SwipeableRowProps) {
+  // Your existing implementation
+  return (
+    <View>
+      {children}
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  // Your existing styles
+});

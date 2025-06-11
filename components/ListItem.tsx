@@ -1,2 +1,7 @@
+import React from 'react';
+import { View } from 'react-native';
 import { Colors } from '@/constants/Colors';
-// ... rest of the file
+
+export function ListItem() {
+  return <View />;
+}
