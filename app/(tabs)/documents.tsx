@@ -1,9 +1,9 @@
-// Update the variable name
-const [signDocumentModalVisible, setSignDocumentModalVisible] = useState(false);
+import React, { useState } from 'react';
+// ... rest of imports
 
-// Replace all occurrences of setSignatureModalVisible with setSignDocumentModalVisible
-// In the handleSendForSignature function:
-setSignDocumentModalVisible(false);
-
-// In the openSignatureModal function:
-setSignDocumentModalVisible(true);
+export default function DocumentsScreen() {
+  const [signDocumentModalVisible, setSignDocumentModalVisible] = useState(false);
+  
+  // ... rest of the component code, replacing all instances of
+  // setSignatureModalVisible with setSignDocumentModalVisible
+}

@@ -1,2 +1,2 @@
-// Update the colors import
-import { colors } from '@/constants/Colors';
+import { Colors } from '@/constants/Colors';
+// ... rest of the file
