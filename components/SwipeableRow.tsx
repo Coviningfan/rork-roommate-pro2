@@ -5,10 +5,12 @@ import {
   StyleSheet,
   TouchableOpacity,
   Animated,
+} from 'react-native';
+import {
   PanGestureHandler,
   PanGestureHandlerGestureEvent,
   State,
-} from 'react-native';
+} from 'react-native-gesture-handler';
 import { colors } from '@/constants/Colors';
 import { spacing, borderRadius } from '@/constants/design-system';
 import { Trash2 } from 'lucide-react-native';
