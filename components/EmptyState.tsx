@@ -1,69 +1,100 @@
-import React from 'react';
-import { View, Text, StyleSheet, ViewStyle } from 'react-native';
-import { Button } from './Button';
+import React, { ReactNode } from 'react';
+import { View, Text, StyleSheet, useWindowDimensions } from 'react-native';
 import { colors } from '@/constants/colors';
+import { spacing, typography } from '@/constants/design-system';
+import { Button } from '@/components/Button';
 
 interface EmptyStateProps {
   title: string;
-  description?: string;
+  description: string;
+  icon?: ReactNode;
   buttonTitle?: string;
   onButtonPress?: () => void;
-  style?: ViewStyle;
-  icon?: React.ReactNode;
+  illustration?: ReactNode;
 }
 
 export const EmptyState: React.FC<EmptyStateProps> = ({
   title,
   description,
+  icon,
   buttonTitle,
   onButtonPress,
-  style,
-  icon,
+  illustration,
 }) => {
+  const { width } = useWindowDimensions();
+  const isTablet = width > 768;
+
   return (
-    <View style={[styles.container, style]}>
-      {icon && <View style={styles.iconContainer}>{icon}</View>}
-      
-      <Text style={styles.title}>{title}</Text>
-      
-      {description && <Text style={styles.description}>{description}</Text>}
-      
-      {buttonTitle && onButtonPress && (
-        <Button
-          title={buttonTitle}
-          onPress={onButtonPress}
-          style={styles.button}
-          variant="primary"
-          size="medium"
-        />
-      )}
+    <View style={[styles.container, isTablet && styles.tabletContainer]}>
+      <View style={styles.content}>
+        {illustration || (
+          <View style={styles.iconContainer}>
+            {icon}
+          </View>
+        )}
+        
+        <Text style={[styles.title, isTablet && styles.tabletTitle]}>
+          {title}
+        </Text>
+        
+        <Text style={[styles.description, isTablet && styles.tabletDescription]}>
+          {description}
+        </Text>
+        
+        {buttonTitle && onButtonPress && (
+          <Button
+            title={buttonTitle}
+            onPress={onButtonPress}
+            variant="primary"
+            size={isTablet ? 'large' : 'medium'}
+            style={styles.button}
+            haptic="medium"
+          />
+        )}
+      </View>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
-    alignItems: 'center',
+    flex: 1,
     justifyContent: 'center',
-    padding: 24,
+    alignItems: 'center',
+    padding: spacing.xxl,
+  },
+  tabletContainer: {
+    padding: spacing.xxxxl,
+  },
+  content: {
+    alignItems: 'center',
+    maxWidth: 400,
   },
   iconContainer: {
-    marginBottom: 16,
+    marginBottom: spacing.xxl,
+    opacity: 0.6,
   },
   title: {
-    fontSize: 18,
-    fontWeight: '600',
+    ...typography.heading2,
     color: colors.text,
     textAlign: 'center',
-    marginBottom: 8,
+    marginBottom: spacing.md,
+  },
+  tabletTitle: {
+    ...typography.heading1,
   },
   description: {
-    fontSize: 14,
+    ...typography.body,
     color: colors.textSecondary,
     textAlign: 'center',
-    marginBottom: 24,
+    lineHeight: 24,
+    marginBottom: spacing.xxl,
+  },
+  tabletDescription: {
+    fontSize: 18,
+    lineHeight: 28,
   },
   button: {
-    minWidth: 150,
+    minWidth: 160,
   },
 });

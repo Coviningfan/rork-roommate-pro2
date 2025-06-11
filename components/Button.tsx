@@ -8,17 +8,20 @@ import {
   TextStyle
 } from 'react-native';
 import { colors } from '@/constants/colors';
+import { spacing, typography, borderRadius, shadows } from '@/constants/design-system';
+import { useHaptics } from '@/hooks/useHaptics';
 
 interface ButtonProps {
   title: string;
   onPress: () => void;
-  variant?: 'primary' | 'secondary' | 'outline' | 'text';
+  variant?: 'primary' | 'secondary' | 'outline' | 'text' | 'destructive';
   size?: 'small' | 'medium' | 'large';
   disabled?: boolean;
   loading?: boolean;
   style?: ViewStyle;
   textStyle?: TextStyle;
   fullWidth?: boolean;
+  haptic?: 'light' | 'medium' | 'heavy' | 'selection' | 'none';
 }
 
 export const Button: React.FC<ButtonProps> = ({
@@ -31,12 +34,37 @@ export const Button: React.FC<ButtonProps> = ({
   style,
   textStyle,
   fullWidth = false,
+  haptic = 'light',
 }) => {
+  const { impact, selection } = useHaptics();
+
+  const handlePress = () => {
+    // Trigger haptic feedback
+    if (haptic !== 'none') {
+      switch (haptic) {
+        case 'light':
+          impact.light();
+          break;
+        case 'medium':
+          impact.medium();
+          break;
+        case 'heavy':
+          impact.heavy();
+          break;
+        case 'selection':
+          selection();
+          break;
+      }
+    }
+    
+    onPress();
+  };
+
   const getButtonStyle = (): ViewStyle => {
     let buttonStyle: ViewStyle = {
       alignItems: 'center',
       justifyContent: 'center',
-      borderRadius: 8,
+      borderRadius: borderRadius.md,
       minHeight: 44, // Ensure minimum touch target
     };
     
@@ -46,24 +74,21 @@ export const Button: React.FC<ButtonProps> = ({
         buttonStyle = {
           ...buttonStyle,
           backgroundColor: colors.primary,
-          borderWidth: 0,
-          elevation: 2,
-          shadowColor: colors.primary,
-          shadowOffset: { width: 0, height: 2 },
-          shadowOpacity: 0.2,
-          shadowRadius: 4,
+          ...shadows.small,
         };
         break;
       case 'secondary':
         buttonStyle = {
           ...buttonStyle,
           backgroundColor: colors.secondary,
-          borderWidth: 0,
-          elevation: 2,
-          shadowColor: colors.secondary,
-          shadowOffset: { width: 0, height: 2 },
-          shadowOpacity: 0.2,
-          shadowRadius: 4,
+          ...shadows.small,
+        };
+        break;
+      case 'destructive':
+        buttonStyle = {
+          ...buttonStyle,
+          backgroundColor: colors.error,
+          ...shadows.small,
         };
         break;
       case 'outline':
@@ -72,17 +97,12 @@ export const Button: React.FC<ButtonProps> = ({
           backgroundColor: 'transparent',
           borderWidth: 1.5,
           borderColor: colors.primary,
-          elevation: 0,
-          shadowOpacity: 0,
         };
         break;
       case 'text':
         buttonStyle = {
           ...buttonStyle,
           backgroundColor: 'transparent',
-          borderWidth: 0,
-          elevation: 0,
-          shadowOpacity: 0,
         };
         break;
     }
@@ -92,27 +112,26 @@ export const Button: React.FC<ButtonProps> = ({
       case 'small':
         buttonStyle = {
           ...buttonStyle,
-          paddingVertical: 8,
-          paddingHorizontal: 16,
-          borderRadius: 6,
+          paddingVertical: spacing.sm,
+          paddingHorizontal: spacing.lg,
+          borderRadius: borderRadius.sm,
           minHeight: 36,
         };
         break;
       case 'medium':
         buttonStyle = {
           ...buttonStyle,
-          paddingVertical: 12,
-          paddingHorizontal: 24,
-          borderRadius: 8,
+          paddingVertical: spacing.md,
+          paddingHorizontal: spacing.xxl,
           minHeight: 44,
         };
         break;
       case 'large':
         buttonStyle = {
           ...buttonStyle,
-          paddingVertical: 16,
-          paddingHorizontal: 32,
-          borderRadius: 10,
+          paddingVertical: spacing.lg,
+          paddingHorizontal: spacing.xxxl,
+          borderRadius: borderRadius.lg,
           minHeight: 52,
         };
         break;
@@ -132,21 +151,20 @@ export const Button: React.FC<ButtonProps> = ({
   };
   
   const getTextStyle = (): TextStyle => {
-    let style: TextStyle = {
-      fontWeight: '600',
+    let textStyleObj: TextStyle = {
       textAlign: 'center',
     };
     
     // Size styles
     switch (size) {
       case 'small':
-        style.fontSize = 14;
+        textStyleObj = { ...textStyleObj, ...typography.smallMedium };
         break;
       case 'medium':
-        style.fontSize = 16;
+        textStyleObj = { ...textStyleObj, ...typography.bodyMedium };
         break;
       case 'large':
-        style.fontSize = 18;
+        textStyleObj = { ...textStyleObj, ...typography.bodySemiBold };
         break;
     }
     
@@ -154,27 +172,28 @@ export const Button: React.FC<ButtonProps> = ({
     switch (variant) {
       case 'primary':
       case 'secondary':
-        style.color = '#FFFFFF';
+      case 'destructive':
+        textStyleObj.color = '#FFFFFF';
         break;
       case 'outline':
       case 'text':
-        style.color = colors.primary;
+        textStyleObj.color = colors.primary;
         break;
     }
     
-    return style;
+    return textStyleObj;
   };
   
   return (
     <TouchableOpacity
       style={[getButtonStyle(), style]}
-      onPress={onPress}
+      onPress={handlePress}
       disabled={disabled || loading}
       activeOpacity={0.8}
     >
       {loading ? (
         <ActivityIndicator 
-          color={variant === 'primary' || variant === 'secondary' ? '#FFFFFF' : colors.primary} 
+          color={variant === 'primary' || variant === 'secondary' || variant === 'destructive' ? '#FFFFFF' : colors.primary} 
           size="small" 
         />
       ) : (

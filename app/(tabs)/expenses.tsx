@@ -7,23 +7,33 @@ import {
   RefreshControl,
   TouchableOpacity,
   Modal,
-  Alert
+  Alert,
+  useWindowDimensions
 } from 'react-native';
 import { colors } from '@/constants/Colors';
+import { spacing, typography, borderRadius, shadows } from '@/constants/design-system';
 import { CreditCard, Plus, DollarSign, Calendar, User, X } from 'lucide-react-native';
 import { EmptyState } from '@/components/EmptyState';
 import { Card } from '@/components/Card';
 import { Button } from '@/components/Button';
 import { Input } from '@/components/Input';
 import { Badge } from '@/components/Badge';
+import { SectionHeader } from '@/components/SectionHeader';
+import { SwipeableRow } from '@/components/SwipeableRow';
 import { useExpenses } from '@/hooks/useSupabaseData';
 import { useAuthStore } from '@/hooks/useAuthStore';
+import { useHaptics } from '@/hooks/useHaptics';
 import { supabase } from '@/lib/supabase';
 import type { Expense } from '@/types/supabase';
 
 export default function ExpensesScreen() {
   const { data: expenses, isLoading, refetch } = useExpenses();
   const { user, apartmentId } = useAuthStore();
+  const { width } = useWindowDimensions();
+  const { impact, notification, selection } = useHaptics();
+  
+  const isTablet = width > 768;
+  
   const [addModalVisible, setAddModalVisible] = useState(false);
   const [loading, setLoading] = useState(false);
   
@@ -47,6 +57,7 @@ export default function ExpensesScreen() {
 
     try {
       setLoading(true);
+      impact.medium();
 
       const { error } = await supabase
         .from('expenses')
@@ -65,6 +76,7 @@ export default function ExpensesScreen() {
 
       if (error) throw error;
 
+      notification.success();
       Alert.alert('Success', 'Expense added successfully');
       setAddModalVisible(false);
       setTitle('');
@@ -74,9 +86,31 @@ export default function ExpensesScreen() {
       refetch();
     } catch (error: any) {
       console.error('Add expense error:', error);
+      notification.error();
       Alert.alert('Error', error.message || 'Failed to add expense');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDeleteExpense = async (expenseId: string) => {
+    try {
+      impact.heavy();
+      notification.error();
+      
+      const { error } = await supabase
+        .from('expenses')
+        .delete()
+        .eq('id', expenseId);
+
+      if (error) throw error;
+
+      Alert.alert('Success', 'Expense deleted successfully');
+      refetch();
+    } catch (error: any) {
+      console.error('Delete expense error:', error);
+      notification.error();
+      Alert.alert('Error', error.message || 'Failed to delete expense');
     }
   };
 
@@ -89,42 +123,53 @@ export default function ExpensesScreen() {
   };
 
   const renderExpenseItem = ({ item }: { item: Expense }) => (
-    <Card style={styles.expenseCard} variant="outlined">
-      <View style={styles.expenseHeader}>
-        <View style={styles.expenseIconContainer}>
-          <DollarSign size={20} color={colors.success} />
+    <SwipeableRow
+      onDelete={() => handleDeleteExpense(item.id)}
+      deleteText="Delete"
+    >
+      <Card style={[styles.expenseCard, isTablet && styles.tabletExpenseCard]} variant="outlined">
+        <View style={styles.expenseHeader}>
+          <View style={styles.expenseIconContainer}>
+            <DollarSign size={20} color={colors.success} />
+          </View>
+          <View style={styles.expenseInfo}>
+            <Text style={[styles.expenseTitle, isTablet && styles.tabletExpenseTitle]}>
+              {item.title}
+            </Text>
+            <Text style={[styles.expenseAmount, isTablet && styles.tabletExpenseAmount]}>
+              ${item.amount.toFixed(2)}
+            </Text>
+          </View>
+          <Badge 
+            label={item.settled ? "Settled" : "Pending"} 
+            variant={item.settled ? "success" : "warning"} 
+            size="small" 
+          />
         </View>
-        <View style={styles.expenseInfo}>
-          <Text style={styles.expenseTitle}>{item.title}</Text>
-          <Text style={styles.expenseAmount}>${item.amount.toFixed(2)}</Text>
+        
+        <View style={styles.expenseMeta}>
+          <View style={styles.metaItem}>
+            <Calendar size={12} color={colors.textSecondary} />
+            <Text style={styles.metaText}>{formatDate(item.date)}</Text>
+          </View>
+          <View style={styles.metaItem}>
+            <Text style={styles.metaText}>Category: {item.category}</Text>
+          </View>
+          <View style={styles.metaItem}>
+            <User size={12} color={colors.textSecondary} />
+            <Text style={styles.metaText}>
+              {item.paid_by === user?.id ? 'You' : 'Other user'}
+            </Text>
+          </View>
         </View>
-        <Badge 
-          label={item.settled ? "Settled" : "Pending"} 
-          variant={item.settled ? "success" : "warning"} 
-          size="small" 
-        />
-      </View>
-      
-      <View style={styles.expenseMeta}>
-        <View style={styles.metaItem}>
-          <Calendar size={12} color={colors.textSecondary} />
-          <Text style={styles.metaText}>{formatDate(item.date)}</Text>
-        </View>
-        <View style={styles.metaItem}>
-          <Text style={styles.metaText}>Category: {item.category}</Text>
-        </View>
-        <View style={styles.metaItem}>
-          <User size={12} color={colors.textSecondary} />
-          <Text style={styles.metaText}>
-            {item.paid_by === user?.id ? 'You' : 'Other user'}
+        
+        {item.description && (
+          <Text style={[styles.expenseDescription, isTablet && styles.tabletExpenseDescription]}>
+            {item.description}
           </Text>
-        </View>
-      </View>
-      
-      {item.description && (
-        <Text style={styles.expenseDescription}>{item.description}</Text>
-      )}
-    </Card>
+        )}
+      </Card>
+    </SwipeableRow>
   );
 
   const totalExpenses = expenses.reduce((sum, expense) => sum + expense.amount, 0);
@@ -133,34 +178,42 @@ export default function ExpensesScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Expenses</Text>
-        <Button
-          title="Add"
-          onPress={() => setAddModalVisible(true)}
-          variant="primary"
-          size="small"
-          style={styles.addButton}
-        />
-      </View>
+      <SectionHeader
+        title="Expenses"
+        action={{
+          title: "Add",
+          onPress: () => {
+            selection();
+            setAddModalVisible(true);
+          },
+        }}
+      />
 
       {/* Summary Cards */}
-      <View style={styles.summaryContainer}>
+      <View style={[styles.summaryContainer, isTablet && styles.tabletSummaryContainer]}>
         <Card style={styles.summaryCard} variant="elevated">
-          <Text style={styles.summaryLabel}>Total Expenses</Text>
-          <Text style={styles.summaryValue}>${totalExpenses.toFixed(2)}</Text>
+          <Text style={[styles.summaryLabel, isTablet && styles.tabletSummaryLabel]}>
+            Total Expenses
+          </Text>
+          <Text style={[styles.summaryValue, isTablet && styles.tabletSummaryValue]}>
+            ${totalExpenses.toFixed(2)}
+          </Text>
         </Card>
         
         <Card style={styles.summaryCard} variant="elevated">
-          <Text style={styles.summaryLabel}>Pending</Text>
-          <Text style={[styles.summaryValue, { color: colors.warning }]}>
+          <Text style={[styles.summaryLabel, isTablet && styles.tabletSummaryLabel]}>
+            Pending
+          </Text>
+          <Text style={[styles.summaryValue, { color: colors.warning }, isTablet && styles.tabletSummaryValue]}>
             {pendingExpenses.length}
           </Text>
         </Card>
         
         <Card style={styles.summaryCard} variant="elevated">
-          <Text style={styles.summaryLabel}>My Expenses</Text>
-          <Text style={[styles.summaryValue, { color: colors.primary }]}>
+          <Text style={[styles.summaryLabel, isTablet && styles.tabletSummaryLabel]}>
+            My Expenses
+          </Text>
+          <Text style={[styles.summaryValue, { color: colors.primary }, isTablet && styles.tabletSummaryValue]}>
             ${myExpenses.reduce((sum, exp) => sum + exp.amount, 0).toFixed(2)}
           </Text>
         </Card>
@@ -171,16 +224,18 @@ export default function ExpensesScreen() {
           data={expenses}
           keyExtractor={(item) => item.id}
           renderItem={renderExpenseItem}
-          contentContainerStyle={styles.expensesList}
+          contentContainerStyle={[styles.expensesList, isTablet && styles.tabletExpensesList]}
           refreshControl={
             <RefreshControl refreshing={isLoading} onRefresh={refetch} />
           }
           showsVerticalScrollIndicator={false}
+          numColumns={isTablet ? 2 : 1}
+          key={isTablet ? 'tablet' : 'phone'}
         />
       ) : (
         <EmptyState
           title={isLoading ? "Loading Expenses..." : "No Expenses"}
-          description={isLoading ? "Please wait while we load your expenses" : "Add your first expense to get started."}
+          description={isLoading ? "Please wait while we load your expenses" : "Add your first expense to get started and track shared costs."}
           icon={<CreditCard size={48} color={colors.textSecondary} />}
           buttonTitle="Add Expense"
           onButtonPress={() => setAddModalVisible(true)}
@@ -195,9 +250,11 @@ export default function ExpensesScreen() {
         onRequestClose={() => setAddModalVisible(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+          <View style={[styles.modalContent, isTablet && styles.tabletModalContent]}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Add Expense</Text>
+              <Text style={[styles.modalTitle, isTablet && styles.tabletModalTitle]}>
+                Add Expense
+              </Text>
               <TouchableOpacity 
                 onPress={() => setAddModalVisible(false)}
                 style={styles.closeButton}
@@ -243,13 +300,16 @@ export default function ExpensesScreen() {
               loading={loading}
               fullWidth
               style={styles.addExpenseButton}
+              haptic="medium"
             />
           </View>
         </View>
       </Modal>
       
       <View style={styles.footer}>
-        <Text style={styles.footerText}>Powered by J.A.B.V Labs</Text>
+        <Text style={[styles.footerText, isTablet && styles.tabletFooterText]}>
+          Powered by J.A.B.V Labs
+        </Text>
       </View>
     </View>
   );
@@ -260,97 +320,104 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    backgroundColor: colors.background,
-  },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: colors.text,
-  },
-  addButton: {
-    minWidth: 60,
-  },
   summaryContainer: {
     flexDirection: 'row',
-    padding: 16,
-    gap: 12,
+    padding: spacing.lg,
+    gap: spacing.md,
+  },
+  tabletSummaryContainer: {
+    paddingHorizontal: spacing.xxl,
+    gap: spacing.lg,
   },
   summaryCard: {
     flex: 1,
-    padding: 16,
+    padding: spacing.lg,
     alignItems: 'center',
   },
   summaryLabel: {
-    fontSize: 12,
+    ...typography.caption,
     color: colors.textSecondary,
-    marginBottom: 4,
+    marginBottom: spacing.xs,
     textAlign: 'center',
   },
+  tabletSummaryLabel: {
+    ...typography.small,
+  },
   summaryValue: {
-    fontSize: 18,
-    fontWeight: '700',
+    ...typography.heading3,
     color: colors.text,
     textAlign: 'center',
   },
+  tabletSummaryValue: {
+    ...typography.heading2,
+  },
   expensesList: {
-    padding: 16,
+    padding: spacing.lg,
+  },
+  tabletExpensesList: {
+    paddingHorizontal: spacing.xxl,
   },
   expenseCard: {
-    marginBottom: 12,
-    padding: 16,
+    marginBottom: spacing.md,
+    padding: spacing.lg,
+    flex: 1,
+    marginHorizontal: spacing.xs,
+  },
+  tabletExpenseCard: {
+    padding: spacing.xl,
   },
   expenseHeader: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    marginBottom: 12,
+    marginBottom: spacing.md,
   },
   expenseIconContainer: {
     width: 32,
     height: 32,
-    borderRadius: 16,
+    borderRadius: borderRadius.lg,
     backgroundColor: `${colors.success}15`,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 12,
+    marginRight: spacing.md,
   },
   expenseInfo: {
     flex: 1,
   },
   expenseTitle: {
-    fontSize: 16,
-    fontWeight: '600',
+    ...typography.bodyMedium,
     color: colors.text,
-    marginBottom: 4,
+    marginBottom: spacing.xs,
+  },
+  tabletExpenseTitle: {
+    ...typography.bodySemiBold,
   },
   expenseAmount: {
-    fontSize: 18,
-    fontWeight: '700',
+    ...typography.heading3,
     color: colors.success,
   },
+  tabletExpenseAmount: {
+    ...typography.heading2,
+  },
   expenseMeta: {
-    gap: 4,
+    gap: spacing.xs,
   },
   metaItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: spacing.xs,
   },
   metaText: {
-    fontSize: 12,
+    ...typography.caption,
     color: colors.textSecondary,
   },
   expenseDescription: {
-    fontSize: 14,
+    ...typography.small,
     color: colors.text,
-    marginTop: 8,
+    marginTop: spacing.sm,
     fontStyle: 'italic',
+  },
+  tabletExpenseDescription: {
+    ...typography.body,
   },
   modalOverlay: {
     flex: 1,
@@ -361,39 +428,44 @@ const styles = StyleSheet.create({
   modalContent: {
     width: '90%',
     backgroundColor: colors.background,
-    borderRadius: 16,
-    padding: 24,
-    elevation: 5,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
+    borderRadius: borderRadius.xl,
+    padding: spacing.xxl,
+    ...shadows.large,
+  },
+  tabletModalContent: {
+    maxWidth: 600,
+    padding: spacing.xxxl,
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: spacing.lg,
   },
   modalTitle: {
-    fontSize: 18,
-    fontWeight: '600',
+    ...typography.heading3,
     color: colors.text,
   },
+  tabletModalTitle: {
+    ...typography.heading2,
+  },
   closeButton: {
-    padding: 4,
+    padding: spacing.xs,
   },
   addExpenseButton: {
-    marginTop: 16,
+    marginTop: spacing.lg,
   },
   footer: {
     alignItems: 'center',
-    padding: 16,
+    padding: spacing.lg,
   },
   footerText: {
-    fontSize: 12,
+    ...typography.caption,
     color: colors.textSecondary,
     fontWeight: '500',
     letterSpacing: 1,
+  },
+  tabletFooterText: {
+    ...typography.small,
   },
 });

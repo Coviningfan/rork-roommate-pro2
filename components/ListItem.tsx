@@ -8,6 +8,8 @@ import {
 } from 'react-native';
 import { ChevronRight } from 'lucide-react-native';
 import { colors } from '@/constants/colors';
+import { spacing, typography, borderRadius } from '@/constants/design-system';
+import { useHaptics } from '@/hooks/useHaptics';
 
 interface ListItemProps {
   title: string;
@@ -18,6 +20,7 @@ interface ListItemProps {
   style?: ViewStyle;
   showChevron?: boolean;
   disabled?: boolean;
+  haptic?: 'light' | 'medium' | 'selection' | 'none';
 }
 
 export const ListItem: React.FC<ListItemProps> = ({
@@ -29,7 +32,31 @@ export const ListItem: React.FC<ListItemProps> = ({
   style,
   showChevron = false,
   disabled = false,
+  haptic = 'selection',
 }) => {
+  const { impact, selection } = useHaptics();
+  
+  const handlePress = () => {
+    if (onPress && !disabled) {
+      // Trigger haptic feedback
+      if (haptic !== 'none') {
+        switch (haptic) {
+          case 'light':
+            impact.light();
+            break;
+          case 'medium':
+            impact.medium();
+            break;
+          case 'selection':
+            selection();
+            break;
+        }
+      }
+      
+      onPress();
+    }
+  };
+
   const Container = onPress ? TouchableOpacity : View;
   
   return (
@@ -39,7 +66,7 @@ export const ListItem: React.FC<ListItemProps> = ({
         disabled && styles.disabled,
         style,
       ]}
-      onPress={disabled ? undefined : onPress}
+      onPress={handlePress}
       activeOpacity={0.7}
       disabled={disabled}
     >
@@ -63,30 +90,30 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
     backgroundColor: colors.background,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
+    borderRadius: borderRadius.md,
   },
   leftIcon: {
-    marginRight: 16,
+    marginRight: spacing.lg,
   },
   content: {
     flex: 1,
   },
   title: {
-    fontSize: 16,
-    fontWeight: '500',
+    ...typography.bodyMedium,
     color: colors.text,
   },
   subtitle: {
-    fontSize: 14,
+    ...typography.small,
     color: colors.textSecondary,
-    marginTop: 2,
+    marginTop: spacing.xs,
   },
   rightIcon: {
-    marginLeft: 16,
+    marginLeft: spacing.lg,
   },
   disabled: {
     opacity: 0.5,

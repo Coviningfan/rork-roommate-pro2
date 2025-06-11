@@ -5,7 +5,8 @@ import {
   StyleSheet, 
   ScrollView, 
   TouchableOpacity,
-  RefreshControl
+  RefreshControl,
+  useWindowDimensions
 } from 'react-native';
 import { router } from 'expo-router';
 import { 
@@ -18,16 +19,23 @@ import {
   FileText
 } from 'lucide-react-native';
 import { colors } from '@/constants/colors';
+import { spacing, typography, borderRadius, shadows } from '@/constants/design-system';
 import { Card } from '@/components/Card';
 import { Avatar } from '@/components/Avatar';
 import { Sidebar } from '@/components/Sidebar';
+import { SectionHeader } from '@/components/SectionHeader';
 import { useAuthStore } from '@/hooks/useAuthStore';
+import { useHaptics } from '@/hooks/useHaptics';
 import { useChores, useExpenses, useGuests, useNotifications } from '@/hooks/useSupabaseData';
 import type { Chore, Expense, Guest, Notification } from '@/types/supabase';
 
 export default function DashboardScreen() {
   const { user, apartmentId, roomCode, apartmentName } = useAuthStore();
   const [sidebarVisible, setSidebarVisible] = useState(false);
+  const { width } = useWindowDimensions();
+  const { impact, selection } = useHaptics();
+  
+  const isTablet = width > 768;
   
   const { data: chores, isLoading: choresLoading, refetch: refetchChores } = useChores();
   const { data: expenses, isLoading: expensesLoading, refetch: refetchExpenses } = useExpenses();
@@ -49,6 +57,7 @@ export default function DashboardScreen() {
   }, [user, apartmentId]);
   
   const handleRefresh = () => {
+    impact.light();
     refetchChores();
     refetchExpenses();
     refetchGuests();
@@ -73,45 +82,56 @@ export default function DashboardScreen() {
   ).slice(0, 3);
   
   const navigateToNotifications = () => {
+    selection();
     router.push('/notifications');
   };
   
   const navigateToDocuments = () => {
+    selection();
     router.push('/(tabs)/documents');
+  };
+  
+  const handleQuickActionPress = (route: string) => {
+    impact.medium();
+    router.push(route as any);
   };
   
   return (
     <>
       <ScrollView 
         style={styles.container}
-        contentContainerStyle={styles.contentContainer}
+        contentContainerStyle={[styles.contentContainer, isTablet && styles.tabletContentContainer]}
         refreshControl={
           <RefreshControl refreshing={isLoading} onRefresh={handleRefresh} />
         }
       >
         {/* Header with user info */}
-        <View style={styles.header}>
+        <View style={[styles.header, isTablet && styles.tabletHeader]}>
           <View style={styles.userInfo}>
             <Avatar 
               source={user?.photoURL} 
               name={user?.displayName || user?.email} 
-              size="large" 
+              size={isTablet ? "xlarge" : "large"} 
             />
             <View style={styles.userTextContainer}>
-              <Text style={styles.welcomeText}>Welcome back,</Text>
-              <Text style={styles.userName}>{user?.displayName || user?.email}</Text>
+              <Text style={[styles.welcomeText, isTablet && styles.tabletWelcomeText]}>
+                Welcome back,
+              </Text>
+              <Text style={[styles.userName, isTablet && styles.tabletUserName]}>
+                {user?.displayName || user?.email}
+              </Text>
             </View>
           </View>
           
           <View style={styles.headerActions}>
             <TouchableOpacity 
-              style={styles.notificationButton}
+              style={[styles.notificationButton, isTablet && styles.tabletNotificationButton]}
               onPress={navigateToNotifications}
             >
-              <Bell size={24} color={colors.text} />
+              <Bell size={isTablet ? 28 : 24} color={colors.text} />
               {unreadNotifications.length > 0 && (
-                <View style={styles.notificationBadge}>
-                  <Text style={styles.notificationBadgeText}>
+                <View style={[styles.notificationBadge, isTablet && styles.tabletNotificationBadge]}>
+                  <Text style={[styles.notificationBadgeText, isTablet && styles.tabletNotificationBadgeText]}>
                     {unreadNotifications.length}
                   </Text>
                 </View>
@@ -119,39 +139,44 @@ export default function DashboardScreen() {
             </TouchableOpacity>
             
             <TouchableOpacity 
-              style={styles.menuButton}
-              onPress={() => setSidebarVisible(true)}
+              style={[styles.menuButton, isTablet && styles.tabletMenuButton]}
+              onPress={() => {
+                selection();
+                setSidebarVisible(true);
+              }}
             >
-              <Menu size={24} color={colors.text} />
+              <Menu size={isTablet ? 28 : 24} color={colors.text} />
             </TouchableOpacity>
           </View>
         </View>
         
         {/* Apartment Info */}
-        <Card style={styles.apartmentCard} variant="elevated">
+        <Card style={[styles.apartmentCard, isTablet && styles.tabletApartmentCard]} variant="elevated">
           <View style={styles.apartmentHeader}>
-            <View style={styles.apartmentIconContainer}>
-              <Home size={32} color={colors.primary} />
+            <View style={[styles.apartmentIconContainer, isTablet && styles.tabletApartmentIconContainer]}>
+              <Home size={isTablet ? 40 : 32} color={colors.primary} />
             </View>
             <View style={styles.apartmentInfo}>
-              <Text style={styles.apartmentName}>{apartmentName || "My Apartment"}</Text>
-              <Text style={styles.apartmentCode}>Code: {roomCode}</Text>
+              <Text style={[styles.apartmentName, isTablet && styles.tabletApartmentName]}>
+                {apartmentName || "My Apartment"}
+              </Text>
+              <Text style={[styles.apartmentCode, isTablet && styles.tabletApartmentCode]}>
+                Code: {roomCode}
+              </Text>
             </View>
           </View>
         </Card>
         
         {/* Notifications */}
         {unreadNotifications.length > 0 && (
-          <Card style={styles.section} variant="elevated">
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Recent Notifications</Text>
-              <TouchableOpacity 
-                style={styles.seeAllButton}
-                onPress={navigateToNotifications}
-              >
-                <Text style={styles.seeAllText}>See All</Text>
-              </TouchableOpacity>
-            </View>
+          <Card style={[styles.section, isTablet && styles.tabletSection]} variant="elevated">
+            <SectionHeader
+              title="Recent Notifications"
+              action={{
+                title: "See All",
+                onPress: navigateToNotifications,
+              }}
+            />
             
             {unreadNotifications.map((notification: Notification) => (
               <View key={notification.id} style={styles.notificationItem}>
@@ -164,8 +189,10 @@ export default function DashboardScreen() {
                   } />
                 </View>
                 <View style={styles.notificationContent}>
-                  <Text style={styles.notificationTitle}>{notification.title}</Text>
-                  <Text style={styles.notificationMessage} numberOfLines={2}>
+                  <Text style={[styles.notificationTitle, isTablet && styles.tabletNotificationTitle]}>
+                    {notification.title}
+                  </Text>
+                  <Text style={[styles.notificationMessage, isTablet && styles.tabletNotificationMessage]} numberOfLines={2}>
                     {notification.message}
                   </Text>
                 </View>
@@ -174,98 +201,100 @@ export default function DashboardScreen() {
           </Card>
         )}
         
-        {/* Quick Actions - Only 4 main actions */}
-        <Card style={styles.section} variant="elevated">
-          <Text style={styles.sectionTitle}>Quick Actions</Text>
+        {/* Quick Actions */}
+        <Card style={[styles.section, isTablet && styles.tabletSection]} variant="elevated">
+          <SectionHeader title="Quick Actions" />
           
-          <View style={styles.quickActions}>
+          <View style={[styles.quickActions, isTablet && styles.tabletQuickActions]}>
             <TouchableOpacity 
-              style={styles.quickAction}
-              onPress={() => router.push('/(tabs)/tasks')}
+              style={[styles.quickAction, isTablet && styles.tabletQuickAction]}
+              onPress={() => handleQuickActionPress('/(tabs)/tasks')}
             >
-              <View style={[styles.quickActionIcon, { backgroundColor: 'rgba(93, 95, 239, 0.1)' }]}>
-                <CheckSquare size={56} color={colors.primary} />
+              <View style={[styles.quickActionIcon, { backgroundColor: 'rgba(93, 95, 239, 0.1)' }, isTablet && styles.tabletQuickActionIcon]}>
+                <CheckSquare size={isTablet ? 64 : 56} color={colors.primary} />
               </View>
-              <Text style={styles.quickActionText}>Tasks</Text>
+              <Text style={[styles.quickActionText, isTablet && styles.tabletQuickActionText]}>
+                Tasks
+              </Text>
             </TouchableOpacity>
             
             <TouchableOpacity 
-              style={styles.quickAction}
-              onPress={() => router.push('/(tabs)/guests')}
+              style={[styles.quickAction, isTablet && styles.tabletQuickAction]}
+              onPress={() => handleQuickActionPress('/(tabs)/guests')}
             >
-              <View style={[styles.quickActionIcon, { backgroundColor: 'rgba(255, 177, 122, 0.1)' }]}>
-                <Users size={56} color={colors.secondary} />
+              <View style={[styles.quickActionIcon, { backgroundColor: 'rgba(255, 177, 122, 0.1)' }, isTablet && styles.tabletQuickActionIcon]}>
+                <Users size={isTablet ? 64 : 56} color={colors.secondary} />
               </View>
-              <Text style={styles.quickActionText}>Guests</Text>
+              <Text style={[styles.quickActionText, isTablet && styles.tabletQuickActionText]}>
+                Guests
+              </Text>
             </TouchableOpacity>
             
             <TouchableOpacity 
-              style={styles.quickAction}
-              onPress={navigateToDocuments}
+              style={[styles.quickAction, isTablet && styles.tabletQuickAction]}
+              onPress={() => handleQuickActionPress('/(tabs)/documents')}
             >
-              <View style={[styles.quickActionIcon, { backgroundColor: 'rgba(33, 150, 243, 0.1)' }]}>
-                <FileText size={56} color={colors.info} />
+              <View style={[styles.quickActionIcon, { backgroundColor: 'rgba(33, 150, 243, 0.1)' }, isTablet && styles.tabletQuickActionIcon]}>
+                <FileText size={isTablet ? 64 : 56} color={colors.info} />
               </View>
-              <Text style={styles.quickActionText}>Documents</Text>
+              <Text style={[styles.quickActionText, isTablet && styles.tabletQuickActionText]}>
+                Documents
+              </Text>
             </TouchableOpacity>
             
             <TouchableOpacity 
-              style={styles.quickAction}
-              onPress={() => router.push('/(tabs)/apartment-settings')}
+              style={[styles.quickAction, isTablet && styles.tabletQuickAction]}
+              onPress={() => handleQuickActionPress('/(tabs)/apartment-settings')}
             >
-              <View style={[styles.quickActionIcon, { backgroundColor: 'rgba(76, 175, 80, 0.1)' }]}>
-                <Home size={56} color={colors.success} />
+              <View style={[styles.quickActionIcon, { backgroundColor: 'rgba(76, 175, 80, 0.1)' }, isTablet && styles.tabletQuickActionIcon]}>
+                <Home size={isTablet ? 64 : 56} color={colors.success} />
               </View>
-              <Text style={styles.quickActionText}>Apartment</Text>
+              <Text style={[styles.quickActionText, isTablet && styles.tabletQuickActionText]}>
+                Apartment
+              </Text>
             </TouchableOpacity>
           </View>
         </Card>
         
-        {/* Data sections - show empty state if no data */}
-        <Card style={styles.section} variant="elevated">
-          <View style={styles.sectionHeader}>
-            <View style={styles.sectionTitleContainer}>
-              <CheckSquare size={20} color={colors.primary} />
-              <Text style={styles.sectionTitle}>My Tasks</Text>
-            </View>
-            <TouchableOpacity 
-              style={styles.seeAllButton}
-              onPress={() => router.push('/(tabs)/tasks')}
-            >
-              <Text style={styles.seeAllText}>See All</Text>
-            </TouchableOpacity>
-          </View>
+        {/* Data sections */}
+        <Card style={[styles.section, isTablet && styles.tabletSection]} variant="elevated">
+          <SectionHeader
+            title="My Tasks"
+            icon={<CheckSquare size={20} color={colors.primary} />}
+            action={{
+              title: "See All",
+              onPress: () => handleQuickActionPress('/(tabs)/tasks'),
+            }}
+          />
           
           <View style={styles.emptyState}>
-            <Text style={styles.emptyStateText}>
+            <Text style={[styles.emptyStateText, isTablet && styles.tabletEmptyStateText]}>
               {choresLoading ? 'Loading tasks...' : 'No pending tasks'}
             </Text>
           </View>
         </Card>
         
-        <Card style={styles.section} variant="elevated">
-          <View style={styles.sectionHeader}>
-            <View style={styles.sectionTitleContainer}>
-              <Users size={20} color={colors.secondary} />
-              <Text style={styles.sectionTitle}>Guest Requests</Text>
-            </View>
-            <TouchableOpacity 
-              style={styles.seeAllButton}
-              onPress={() => router.push('/(tabs)/guests')}
-            >
-              <Text style={styles.seeAllText}>See All</Text>
-            </TouchableOpacity>
-          </View>
+        <Card style={[styles.section, isTablet && styles.tabletSection]} variant="elevated">
+          <SectionHeader
+            title="Guest Requests"
+            icon={<Users size={20} color={colors.secondary} />}
+            action={{
+              title: "See All",
+              onPress: () => handleQuickActionPress('/(tabs)/guests'),
+            }}
+          />
           
           <View style={styles.emptyState}>
-            <Text style={styles.emptyStateText}>
+            <Text style={[styles.emptyStateText, isTablet && styles.tabletEmptyStateText]}>
               {guestsLoading ? 'Loading guests...' : 'No pending guest requests'}
             </Text>
           </View>
         </Card>
         
         <View style={styles.footer}>
-          <Text style={styles.footerText}>J.A.B.V Labs</Text>
+          <Text style={[styles.footerText, isTablet && styles.tabletFooterText]}>
+            J.A.B.V Labs
+          </Text>
         </View>
       </ScrollView>
       
@@ -283,14 +312,21 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
   },
   contentContainer: {
-    padding: 16,
-    paddingBottom: 32,
+    padding: spacing.lg,
+    paddingBottom: spacing.xxxl,
+  },
+  tabletContentContainer: {
+    padding: spacing.xxl,
+    paddingBottom: spacing.xxxxl,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 24,
+    marginBottom: spacing.xxl,
+  },
+  tabletHeader: {
+    marginBottom: spacing.xxxl,
   },
   userInfo: {
     flexDirection: 'row',
@@ -298,22 +334,27 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   userTextContainer: {
-    marginLeft: 16,
+    marginLeft: spacing.lg,
     flex: 1,
   },
   welcomeText: {
-    fontSize: 14,
+    ...typography.small,
     color: colors.textSecondary,
   },
+  tabletWelcomeText: {
+    ...typography.body,
+  },
   userName: {
-    fontSize: 20,
-    fontWeight: '700',
+    ...typography.heading3,
     color: colors.text,
+  },
+  tabletUserName: {
+    ...typography.heading2,
   },
   headerActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: spacing.sm,
   },
   notificationButton: {
     width: 48,
@@ -322,6 +363,12 @@ const styles = StyleSheet.create({
     backgroundColor: colors.card,
     justifyContent: 'center',
     alignItems: 'center',
+    ...shadows.small,
+  },
+  tabletNotificationButton: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
   },
   menuButton: {
     width: 48,
@@ -330,6 +377,12 @@ const styles = StyleSheet.create({
     backgroundColor: colors.card,
     justifyContent: 'center',
     alignItems: 'center',
+    ...shadows.small,
+  },
+  tabletMenuButton: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
   },
   notificationBadge: {
     position: 'absolute',
@@ -342,14 +395,28 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  tabletNotificationBadge: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    top: 10,
+    right: 10,
+  },
   notificationBadgeText: {
     color: '#FFFFFF',
-    fontSize: 10,
+    ...typography.caption,
     fontWeight: 'bold',
   },
+  tabletNotificationBadgeText: {
+    fontSize: 11,
+  },
   apartmentCard: {
-    marginBottom: 24,
-    padding: 16,
+    marginBottom: spacing.xxl,
+    padding: spacing.lg,
+  },
+  tabletApartmentCard: {
+    padding: spacing.xl,
+    marginBottom: spacing.xxxl,
   },
   apartmentHeader: {
     flexDirection: 'row',
@@ -362,108 +429,102 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(93, 95, 239, 0.1)',
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 16,
+    marginRight: spacing.lg,
+  },
+  tabletApartmentIconContainer: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    marginRight: spacing.xl,
   },
   apartmentInfo: {
     flex: 1,
   },
   apartmentName: {
-    fontSize: 18,
-    fontWeight: '600',
+    ...typography.heading3,
     color: colors.text,
-    marginBottom: 4,
+    marginBottom: spacing.xs,
+  },
+  tabletApartmentName: {
+    ...typography.heading2,
   },
   apartmentCode: {
-    fontSize: 14,
+    ...typography.small,
     color: colors.textSecondary,
   },
+  tabletApartmentCode: {
+    ...typography.body,
+  },
   section: {
-    marginBottom: 24,
+    marginBottom: spacing.xxl,
   },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-    paddingHorizontal: 16,
-    paddingTop: 16,
-  },
-  sectionTitleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: colors.text,
-    marginLeft: 8,
-  },
-  seeAllButton: {
-    backgroundColor: colors.primary,
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 24,
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  seeAllText: {
-    fontSize: 14,
-    color: '#FFFFFF',
-    fontWeight: '600',
+  tabletSection: {
+    marginBottom: spacing.xxxl,
   },
   emptyState: {
-    padding: 24,
+    padding: spacing.xxl,
     alignItems: 'center',
     justifyContent: 'center',
   },
   emptyStateText: {
-    fontSize: 14,
+    ...typography.small,
     color: colors.textSecondary,
+  },
+  tabletEmptyStateText: {
+    ...typography.body,
   },
   notificationItem: {
     flexDirection: 'row',
-    padding: 12,
+    padding: spacing.md,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
-    paddingHorizontal: 16,
+    paddingHorizontal: spacing.lg,
   },
   notificationIcon: {
-    marginRight: 12,
+    marginRight: spacing.md,
   },
   notificationContent: {
     flex: 1,
   },
   notificationTitle: {
-    fontSize: 14,
-    fontWeight: '600',
+    ...typography.smallMedium,
     color: colors.text,
-    marginBottom: 4,
+    marginBottom: spacing.xs,
+  },
+  tabletNotificationTitle: {
+    ...typography.bodyMedium,
   },
   notificationMessage: {
-    fontSize: 12,
+    ...typography.caption,
     color: colors.textSecondary,
+  },
+  tabletNotificationMessage: {
+    ...typography.small,
   },
   quickActions: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
-    padding: 16,
+    padding: spacing.lg,
+    gap: spacing.lg,
+  },
+  tabletQuickActions: {
+    padding: spacing.xl,
+    gap: spacing.xl,
   },
   quickAction: {
     width: '48%',
     backgroundColor: colors.card,
-    borderRadius: 20,
-    padding: 24,
+    borderRadius: borderRadius.xl,
+    padding: spacing.xxl,
     alignItems: 'center',
-    marginBottom: 16,
-    elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    marginBottom: spacing.lg,
+    ...shadows.medium,
+  },
+  tabletQuickAction: {
+    width: '22%',
+    padding: spacing.xxxl,
+    borderRadius: borderRadius.xxl,
   },
   quickActionIcon: {
     width: 112,
@@ -471,22 +532,33 @@ const styles = StyleSheet.create({
     borderRadius: 56,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: spacing.lg,
+  },
+  tabletQuickActionIcon: {
+    width: 140,
+    height: 140,
+    borderRadius: 70,
+    marginBottom: spacing.xl,
   },
   quickActionText: {
-    fontSize: 16,
-    fontWeight: '600',
+    ...typography.bodyMedium,
     color: colors.text,
+  },
+  tabletQuickActionText: {
+    ...typography.bodySemiBold,
   },
   footer: {
     alignItems: 'center',
-    marginTop: 8,
-    marginBottom: 16,
+    marginTop: spacing.sm,
+    marginBottom: spacing.lg,
   },
   footerText: {
-    fontSize: 12,
+    ...typography.caption,
     color: colors.textSecondary,
     fontWeight: '500',
     letterSpacing: 1,
+  },
+  tabletFooterText: {
+    ...typography.small,
   },
 });

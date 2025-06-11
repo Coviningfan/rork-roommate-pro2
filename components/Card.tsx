@@ -1,13 +1,13 @@
 import React, { ReactNode } from 'react';
-import { View, StyleSheet, ViewStyle, Text } from 'react-native';
+import { View, StyleSheet, ViewStyle } from 'react-native';
 import { colors } from '@/constants/colors';
+import { spacing, borderRadius, shadows } from '@/constants/design-system';
 
 interface CardProps {
   children: ReactNode;
   style?: ViewStyle;
   variant?: 'default' | 'elevated' | 'outlined';
   padding?: 'none' | 'small' | 'medium' | 'large';
-  showBranding?: boolean;
 }
 
 export const Card: React.FC<CardProps> = ({
@@ -15,34 +15,26 @@ export const Card: React.FC<CardProps> = ({
   style,
   variant = 'default',
   padding = 'medium',
-  showBranding = false,
 }) => {
-  const getCardStyle = () => {
-    let cardStyle: ViewStyle = {};
+  const getCardStyle = (): ViewStyle => {
+    let cardStyle: ViewStyle = {
+      backgroundColor: colors.card,
+      borderRadius: borderRadius.lg,
+    };
     
     // Variant styles
     switch (variant) {
       case 'default':
-        cardStyle = {
-          backgroundColor: colors.card,
-          borderRadius: 12,
-        };
         break;
       case 'elevated':
         cardStyle = {
-          backgroundColor: colors.card,
-          borderRadius: 12,
-          elevation: 4,
-          shadowColor: '#000',
-          shadowOffset: { width: 0, height: 2 },
-          shadowOpacity: 0.1,
-          shadowRadius: 4,
+          ...cardStyle,
+          ...shadows.medium,
         };
         break;
       case 'outlined':
         cardStyle = {
-          backgroundColor: colors.card,
-          borderRadius: 12,
+          ...cardStyle,
           borderWidth: 1,
           borderColor: colors.border,
         };
@@ -55,13 +47,13 @@ export const Card: React.FC<CardProps> = ({
         cardStyle.padding = 0;
         break;
       case 'small':
-        cardStyle.padding = 12;
+        cardStyle.padding = spacing.md;
         break;
       case 'medium':
-        cardStyle.padding = 16;
+        cardStyle.padding = spacing.lg;
         break;
       case 'large':
-        cardStyle.padding = 24;
+        cardStyle.padding = spacing.xxl;
         break;
     }
     
@@ -71,28 +63,8 @@ export const Card: React.FC<CardProps> = ({
   return (
     <View style={[getCardStyle(), style]}>
       {children}
-      
-      {showBranding && (
-        <View style={styles.brandingContainer}>
-          <Text style={styles.brandingText}>J.A.B.V Labs</Text>
-        </View>
-      )}
     </View>
   );
 };
-
-const styles = StyleSheet.create({
-  brandingContainer: {
-    alignItems: 'flex-end',
-    marginTop: 8,
-  },
-  brandingText: {
-    fontSize: 10,
-    color: colors.textSecondary,
-    fontWeight: '500',
-    letterSpacing: 0.5,
-    opacity: 0.7,
-  },
-});
 
 export default Card;
