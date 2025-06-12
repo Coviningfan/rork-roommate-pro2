@@ -1,38 +1,63 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from './useAuthStore';
 import type { Chore, Expense, Guest, Notification, Document, ModificationRequest, DocumentReference } from '@/types/supabase';
 
-// Generic hook for Supabase data fetching
+// Generic hook for Supabase data fetching with optimizations
 export function useSupabaseQuery<T>(
   table: string,
   select: string = '*',
-  filters?: Record<string, any>
+  filters?: Record<string, any>,
+  options?: {
+    enabled?: boolean;
+    refetchInterval?: number;
+    orderBy?: { column: string; ascending?: boolean };
+  }
 ) {
   const [data, setData] = useState<T[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { user } = useAuthStore();
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  const fetchData = async () => {
-    if (!user) {
+  const fetchData = useCallback(async () => {
+    if (!user || options?.enabled === false) {
       setData([]);
       setIsLoading(false);
       return;
     }
 
+    // Cancel previous request
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+
+    abortControllerRef.current = new AbortController();
+
     try {
       setIsLoading(true);
+      setError(null);
+      
       let query = supabase.from(table).select(select);
       
       // Apply filters
       if (filters) {
         Object.entries(filters).forEach(([key, value]) => {
-          query = query.eq(key, value);
+          if (value !== undefined && value !== null) {
+            query = query.eq(key, value);
+          }
+        });
+      }
+
+      // Apply ordering
+      if (options?.orderBy) {
+        query = query.order(options.orderBy.column, { 
+          ascending: options.orderBy.ascending ?? false 
         });
       }
       
-      const { data: result, error } = await query;
+      const { data: result, error } = await query.abortSignal(abortControllerRef.current.signal);
       
       if (error) {
         // Check if error is due to table not existing
@@ -48,56 +73,129 @@ export function useSupabaseQuery<T>(
       setData(result as T[] || []);
       setError(null);
     } catch (err: any) {
+      if (err.name === 'AbortError') {
+        return; // Request was cancelled
+      }
       console.error(`Error fetching ${table}:`, err);
       setError(err.message);
       setData([]);
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [user, table, select, JSON.stringify(filters), options?.enabled, options?.orderBy]);
 
   useEffect(() => {
     fetchData();
-  }, [user, table, JSON.stringify(filters)]);
 
-  return { data, isLoading, error, refetch: fetchData };
+    // Set up refetch interval if specified
+    if (options?.refetchInterval && options.refetchInterval > 0) {
+      intervalRef.current = setInterval(fetchData, options.refetchInterval);
+    }
+
+    // Cleanup function
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+      }
+    };
+  }, [fetchData, options?.refetchInterval]);
+
+  return { 
+    data, 
+    isLoading, 
+    error, 
+    refetch: fetchData,
+    isEmpty: data.length === 0 && !isLoading && !error
+  };
 }
 
-// Specific hooks for different data types
+// Optimized specific hooks for different data types
 export function useChores() {
-  const { user, apartmentId } = useAuthStore();
-  return useSupabaseQuery<Chore>('chores', '*', apartmentId ? { apartment_id: apartmentId } : undefined);
+  const { apartmentId } = useAuthStore();
+  return useSupabaseQuery<Chore>(
+    'chores', 
+    '*', 
+    apartmentId ? { apartment_id: apartmentId } : undefined,
+    {
+      enabled: !!apartmentId,
+      orderBy: { column: 'created_at', ascending: false }
+    }
+  );
 }
 
 export function useExpenses() {
-  const { user, apartmentId } = useAuthStore();
-  return useSupabaseQuery<Expense>('expenses', '*', apartmentId ? { apartment_id: apartmentId } : undefined);
+  const { apartmentId } = useAuthStore();
+  return useSupabaseQuery<Expense>(
+    'expenses', 
+    '*', 
+    apartmentId ? { apartment_id: apartmentId } : undefined,
+    {
+      enabled: !!apartmentId,
+      orderBy: { column: 'date', ascending: false }
+    }
+  );
 }
 
 export function useGuests() {
-  const { user, apartmentId } = useAuthStore();
-  return useSupabaseQuery<Guest>('guests', '*', apartmentId ? { apartment_id: apartmentId } : undefined);
+  const { apartmentId } = useAuthStore();
+  return useSupabaseQuery<Guest>(
+    'guests', 
+    '*', 
+    apartmentId ? { apartment_id: apartmentId } : undefined,
+    {
+      enabled: !!apartmentId,
+      orderBy: { column: 'check_in_date', ascending: false }
+    }
+  );
 }
 
 export function useNotifications() {
   const { user } = useAuthStore();
-  return useSupabaseQuery<Notification>('notifications', '*', user ? { user_id: user.id } : undefined);
+  return useSupabaseQuery<Notification>(
+    'notifications', 
+    '*', 
+    user?.id ? { user_id: user.id } : undefined,
+    {
+      enabled: !!user?.id,
+      orderBy: { column: 'created_at', ascending: false },
+      refetchInterval: 30000 // Refetch every 30 seconds
+    }
+  );
 }
 
 export function useDocuments() {
-  const { user, apartmentId } = useAuthStore();
-  return useSupabaseQuery<Document>('documents', '*', apartmentId ? { apartment_id: apartmentId } : undefined);
+  const { apartmentId } = useAuthStore();
+  return useSupabaseQuery<Document>(
+    'documents', 
+    '*', 
+    apartmentId ? { apartment_id: apartmentId } : undefined,
+    {
+      enabled: !!apartmentId,
+      orderBy: { column: 'created_at', ascending: false }
+    }
+  );
 }
 
 export function useModificationRequests() {
-  const { user, apartmentId } = useAuthStore();
-  return useSupabaseQuery<ModificationRequest>('modification_requests', `
-    *,
-    documents!inner(name)
-  `, apartmentId ? { apartment_id: apartmentId } : undefined);
+  const { apartmentId } = useAuthStore();
+  return useSupabaseQuery<ModificationRequest>(
+    'modification_requests', 
+    `
+      *,
+      documents!inner(name)
+    `, 
+    apartmentId ? { apartment_id: apartmentId } : undefined,
+    {
+      enabled: !!apartmentId,
+      orderBy: { column: 'created_at', ascending: false }
+    }
+  );
 }
 
-// Document operations
+// Optimized document operations with better error handling
 export async function deleteDocument(documentId: string): Promise<void> {
   try {
     // First get the document to find the file URL
@@ -161,27 +259,21 @@ export async function createModificationRequest(
     }
     
     // Get document and apartment info for notifications
-    const { data: document, error: docError } = await supabase
-      .from('documents')
-      .select('name, uploader_id')
-      .eq('id', documentId)
-      .single();
+    const [documentResult, apartmentResult] = await Promise.allSettled([
+      supabase
+        .from('documents')
+        .select('name, uploader_id')
+        .eq('id', documentId)
+        .single(),
+      supabase
+        .from('apartments')
+        .select('user_id')
+        .eq('id', apartmentId)
+        .single()
+    ]);
     
-    if (docError) {
-      console.error('Error fetching document:', docError);
-      // Continue even if we can't get document details
-    }
-    
-    const { data: apartment, error: aptError } = await supabase
-      .from('apartments')
-      .select('user_id')
-      .eq('id', apartmentId)
-      .single();
-    
-    if (aptError) {
-      console.error('Error fetching apartment:', aptError);
-      // Continue even if we can't get apartment details
-    }
+    const document = documentResult.status === 'fulfilled' ? documentResult.value.data : null;
+    const apartment = apartmentResult.status === 'fulfilled' ? apartmentResult.value.data : null;
     
     if (document && apartment) {
       // Create notifications for both apartment owner and document uploader (if different)

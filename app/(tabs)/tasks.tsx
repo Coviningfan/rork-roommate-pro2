@@ -1,10 +1,9 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import React, { useState, useCallback, useMemo, memo } from 'react';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, ListRenderItem } from 'react-native';
 import { Stack } from 'expo-router';
 import { Colors } from '@/constants/Colors';
 import { spacing, borderRadius } from '@/constants/design-system';
 import { Card } from '@/components/Card';
-import { Button } from '@/components/Button';
 import { EmptyState } from '@/components/EmptyState';
 import { SwipeableRow } from '@/components/SwipeableRow';
 import { CheckCircle, Circle, Plus, Calendar } from 'lucide-react-native';
@@ -48,43 +47,41 @@ const mockTasks: Task[] = [
   }
 ];
 
-export default function TasksScreen() {
-  const [tasks, setTasks] = useState<Task[]>(mockTasks);
-  const { triggerHaptic } = useHaptics();
+// Memoized Task Item Component
+const TaskItem = memo(({ 
+  task, 
+  onToggle, 
+  onDelete 
+}: { 
+  task: Task; 
+  onToggle: (id: string) => void;
+  onDelete: (id: string) => void;
+}) => {
+  const handleToggle = useCallback(() => {
+    onToggle(task.id);
+  }, [task.id, onToggle]);
 
-  const handleToggleTask = (taskId: string) => {
-    setTasks(prev => prev.map(task => 
-      task.id === taskId 
-        ? { ...task, completed: !task.completed }
-        : task
-    ));
-    triggerHaptic('success');
-  };
+  const handleDelete = useCallback(() => {
+    onDelete(task.id);
+  }, [task.id, onDelete]);
 
-  const handleDeleteTask = (taskId: string) => {
-    setTasks(prev => prev.filter(task => task.id !== taskId));
-    triggerHaptic('error');
-  };
-
-  const getPriorityColor = (priority: Task['priority']) => {
-    switch (priority) {
+  const priorityColor = useMemo(() => {
+    switch (task.priority) {
       case 'high': return '#F44336';
       case 'medium': return '#FF9800';
       case 'low': return '#4CAF50';
       default: return Colors.light.icon;
     }
-  };
+  }, [task.priority]);
 
-  const renderTask = (task: Task) => (
-    <SwipeableRow
-      key={task.id}
-      onDelete={() => handleDeleteTask(task.id)}
-    >
+  return (
+    <SwipeableRow onDelete={handleDelete}>
       <Card style={styles.taskCard}>
         <View style={styles.taskHeader}>
           <TouchableOpacity
-            onPress={() => handleToggleTask(task.id)}
+            onPress={handleToggle}
             style={styles.checkboxContainer}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
             {task.completed ? (
               <CheckCircle size={24} color={Colors.light.tint} />
@@ -123,73 +120,141 @@ export default function TasksScreen() {
           
           <View style={[
             styles.priorityIndicator,
-            { backgroundColor: getPriorityColor(task.priority) }
+            { backgroundColor: priorityColor }
           ]} />
         </View>
       </Card>
     </SwipeableRow>
   );
+});
 
-  const completedTasks = tasks.filter(task => task.completed);
-  const pendingTasks = tasks.filter(task => !task.completed);
+TaskItem.displayName = 'TaskItem';
+
+export default function TasksScreen() {
+  const [tasks, setTasks] = useState<Task[]>(mockTasks);
+  const { triggerHaptic } = useHaptics();
+
+  const handleToggleTask = useCallback((taskId: string) => {
+    setTasks(prev => prev.map(task => 
+      task.id === taskId 
+        ? { ...task, completed: !task.completed }
+        : task
+    ));
+    triggerHaptic('success');
+  }, [triggerHaptic]);
+
+  const handleDeleteTask = useCallback((taskId: string) => {
+    setTasks(prev => prev.filter(task => task.id !== taskId));
+    triggerHaptic('error');
+  }, [triggerHaptic]);
+
+  const handleAddTask = useCallback(() => {
+    triggerHaptic('selection');
+    // Handle add task logic
+  }, [triggerHaptic]);
+
+  const { pendingTasks, completedTasks } = useMemo(() => {
+    const pending = tasks.filter(task => !task.completed);
+    const completed = tasks.filter(task => task.completed);
+    return { pendingTasks: pending, completedTasks: completed };
+  }, [tasks]);
+
+  const renderTask: ListRenderItem<Task> = useCallback(({ item }) => (
+    <TaskItem
+      task={item}
+      onToggle={handleToggleTask}
+      onDelete={handleDeleteTask}
+    />
+  ), [handleToggleTask, handleDeleteTask]);
+
+  const keyExtractor = useCallback((item: Task) => item.id, []);
+
+  const getItemLayout = useCallback((data: any, index: number) => ({
+    length: 120, // Approximate item height
+    offset: 120 * index,
+    index,
+  }), []);
+
+  const ListEmptyComponent = useMemo(() => (
+    <EmptyState
+      icon={Calendar}
+      title="No Tasks"
+      description="Add your first task to get started"
+      actionTitle="Add Task"
+      onAction={handleAddTask}
+    />
+  ), [handleAddTask]);
+
+  const HeaderRight = useMemo(() => (
+    <TouchableOpacity 
+      onPress={handleAddTask}
+      style={styles.headerButton}
+      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+    >
+      <Plus size={24} color={Colors.light.tint} />
+    </TouchableOpacity>
+  ), [handleAddTask]);
+
+  const renderSection = useCallback((title: string, data: Task[], count: number) => {
+    if (data.length === 0) return null;
+
+    return (
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>
+          {title} ({count})
+        </Text>
+        <FlatList
+          data={data}
+          renderItem={renderTask}
+          keyExtractor={keyExtractor}
+          getItemLayout={getItemLayout}
+          showsVerticalScrollIndicator={false}
+          removeClippedSubviews={true}
+          maxToRenderPerBatch={5}
+          windowSize={5}
+          initialNumToRender={3}
+          ItemSeparatorComponent={() => <View style={styles.separator} />}
+        />
+      </View>
+    );
+  }, [renderTask, keyExtractor, getItemLayout]);
+
+  if (tasks.length === 0) {
+    return (
+      <View style={styles.container}>
+        <Stack.Screen 
+          options={{ 
+            title: 'Tasks',
+            headerRight: () => HeaderRight
+          }} 
+        />
+        <View style={styles.emptyContainer}>
+          {ListEmptyComponent}
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
       <Stack.Screen 
         options={{ 
           title: 'Tasks',
-          headerRight: () => (
-            <TouchableOpacity 
-              onPress={() => triggerHaptic('selection')}
-              style={styles.headerButton}
-            >
-              <Plus size={24} color={Colors.light.tint} />
-            </TouchableOpacity>
-          )
+          headerRight: () => HeaderRight
         }} 
       />
       
-      <ScrollView 
-        style={styles.scrollView}
+      <FlatList
+        data={[
+          { type: 'section', title: 'Pending', data: pendingTasks, count: pendingTasks.length },
+          { type: 'section', title: 'Completed', data: completedTasks, count: completedTasks.length }
+        ]}
+        renderItem={({ item }) => renderSection(item.title, item.data, item.count)}
+        keyExtractor={(item) => item.title}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
-      >
-        {tasks.length === 0 ? (
-          <EmptyState
-            icon={Calendar}
-            title="No Tasks"
-            description="Add your first task to get started"
-            actionTitle="Add Task"
-            onAction={() => triggerHaptic('selection')}
-          />
-        ) : (
-          <>
-            {/* Pending Tasks */}
-            {pendingTasks.length > 0 && (
-              <View style={styles.section}>
-                <Text style={styles.sectionTitle}>
-                  Pending ({pendingTasks.length})
-                </Text>
-                <View style={styles.tasksContainer}>
-                  {pendingTasks.map(renderTask)}
-                </View>
-              </View>
-            )}
-
-            {/* Completed Tasks */}
-            {completedTasks.length > 0 && (
-              <View style={styles.section}>
-                <Text style={styles.sectionTitle}>
-                  Completed ({completedTasks.length})
-                </Text>
-                <View style={styles.tasksContainer}>
-                  {completedTasks.map(renderTask)}
-                </View>
-              </View>
-            )}
-          </>
-        )}
-      </ScrollView>
+        removeClippedSubviews={true}
+      />
     </View>
   );
 }
@@ -199,8 +264,11 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.light.background,
   },
-  scrollView: {
+  emptyContainer: {
     flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: spacing.md,
   },
   scrollContent: {
     padding: spacing.md,
@@ -214,8 +282,8 @@ const styles = StyleSheet.create({
     color: Colors.light.text,
     marginBottom: spacing.md,
   },
-  tasksContainer: {
-    gap: spacing.sm,
+  separator: {
+    height: spacing.sm,
   },
   taskCard: {
     padding: spacing.md,

@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
+import React, { useState, useCallback, useMemo, memo } from 'react';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, Alert, ListRenderItem } from 'react-native';
 import { Stack } from 'expo-router';
 import { Colors } from '@/constants/Colors';
 import { spacing, borderRadius } from '@/constants/design-system';
@@ -8,7 +8,7 @@ import { Button } from '@/components/Button';
 import { EmptyState } from '@/components/EmptyState';
 import { SwipeableRow } from '@/components/SwipeableRow';
 import { SignatureCapture } from '@/components/SignatureCapture';
-import { FileText, Plus, Download, Share } from 'lucide-react-native';
+import { FileText, Plus } from 'lucide-react-native';
 import { useHaptics } from '@/hooks/useHaptics';
 
 interface Document {
@@ -41,69 +41,36 @@ const mockDocuments: Document[] = [
   }
 ];
 
-export default function DocumentsScreen() {
-  const [documents, setDocuments] = useState<Document[]>(mockDocuments);
-  const [signDocumentModalVisible, setSignDocumentModalVisible] = useState(false);
-  const [selectedDocument, setSelectedDocument] = useState<Document | null>(null);
-  const { triggerHaptic } = useHaptics();
+// Memoized Document Item Component
+const DocumentItem = memo(({ 
+  document, 
+  onDelete, 
+  onSign 
+}: { 
+  document: Document; 
+  onDelete: (id: string) => void;
+  onSign: (doc: Document) => void;
+}) => {
+  const handleDelete = useCallback(() => {
+    onDelete(document.id);
+  }, [document.id, onDelete]);
 
-  const handleDeleteDocument = (documentId: string) => {
-    Alert.alert(
-      'Delete Document',
-      'Are you sure you want to delete this document?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: () => {
-            setDocuments(prev => prev.filter(doc => doc.id !== documentId));
-            triggerHaptic('error');
-          }
-        }
-      ]
-    );
-  };
+  const handleSign = useCallback(() => {
+    onSign(document);
+  }, [document, onSign]);
 
-  const handleSignDocument = (document: Document) => {
-    setSelectedDocument(document);
-    setSignDocumentModalVisible(true);
-    triggerHaptic('selection');
-  };
-
-  const handleSignatureComplete = (signature: string) => {
-    if (selectedDocument) {
-      setDocuments(prev => prev.map(doc => 
-        doc.id === selectedDocument.id 
-          ? { 
-              ...doc, 
-              status: 'signed' as const,
-              signedAt: new Date().toISOString(),
-              signedBy: [...(doc.signedBy || []), 'Current User']
-            }
-          : doc
-      ));
-      triggerHaptic('success');
-    }
-    setSignDocumentModalVisible(false);
-    setSelectedDocument(null);
-  };
-
-  const getStatusColor = (status: Document['status']) => {
-    switch (status) {
+  const statusColor = useMemo(() => {
+    switch (document.status) {
       case 'draft': return Colors.light.icon;
       case 'pending': return '#FF9800';
       case 'signed': return '#4CAF50';
       case 'archived': return Colors.light.icon;
       default: return Colors.light.icon;
     }
-  };
+  }, [document.status]);
 
-  const renderDocument = (document: Document) => (
-    <SwipeableRow
-      key={document.id}
-      onDelete={() => handleDeleteDocument(document.id)}
-    >
+  return (
+    <SwipeableRow onDelete={handleDelete}>
       <Card style={styles.documentCard}>
         <View style={styles.documentHeader}>
           <View style={styles.documentIcon}>
@@ -115,7 +82,7 @@ export default function DocumentsScreen() {
               {document.type} • {document.createdAt}
             </Text>
           </View>
-          <View style={[styles.statusBadge, { backgroundColor: getStatusColor(document.status) }]}>
+          <View style={[styles.statusBadge, { backgroundColor: statusColor }]}>
             <Text style={styles.statusText}>{document.status}</Text>
           </View>
         </View>
@@ -124,7 +91,7 @@ export default function DocumentsScreen() {
           <View style={styles.documentActions}>
             <Button
               title="Sign Document"
-              onPress={() => handleSignDocument(document)}
+              onPress={handleSign}
               variant="primary"
               size="small"
             />
@@ -142,42 +109,121 @@ export default function DocumentsScreen() {
       </Card>
     </SwipeableRow>
   );
+});
+
+DocumentItem.displayName = 'DocumentItem';
+
+export default function DocumentsScreen() {
+  const [documents, setDocuments] = useState<Document[]>(mockDocuments);
+  const [signDocumentModalVisible, setSignDocumentModalVisible] = useState(false);
+  const [selectedDocument, setSelectedDocument] = useState<Document | null>(null);
+  const { triggerHaptic } = useHaptics();
+
+  const handleDeleteDocument = useCallback((documentId: string) => {
+    Alert.alert(
+      'Delete Document',
+      'Are you sure you want to delete this document?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => {
+            setDocuments(prev => prev.filter(doc => doc.id !== documentId));
+            triggerHaptic('error');
+          }
+        }
+      ]
+    );
+  }, [triggerHaptic]);
+
+  const handleSignDocument = useCallback((document: Document) => {
+    setSelectedDocument(document);
+    setSignDocumentModalVisible(true);
+    triggerHaptic('selection');
+  }, [triggerHaptic]);
+
+  const handleSignatureComplete = useCallback((signature: string) => {
+    if (selectedDocument) {
+      setDocuments(prev => prev.map(doc => 
+        doc.id === selectedDocument.id 
+          ? { 
+              ...doc, 
+              status: 'signed' as const,
+              signedAt: new Date().toISOString(),
+              signedBy: [...(doc.signedBy || []), 'Current User']
+            }
+          : doc
+      ));
+      triggerHaptic('success');
+    }
+    setSignDocumentModalVisible(false);
+    setSelectedDocument(null);
+  }, [selectedDocument, triggerHaptic]);
+
+  const handleAddDocument = useCallback(() => {
+    triggerHaptic('selection');
+    // Handle add document logic
+  }, [triggerHaptic]);
+
+  const renderDocument: ListRenderItem<Document> = useCallback(({ item }) => (
+    <DocumentItem
+      document={item}
+      onDelete={handleDeleteDocument}
+      onSign={handleSignDocument}
+    />
+  ), [handleDeleteDocument, handleSignDocument]);
+
+  const keyExtractor = useCallback((item: Document) => item.id, []);
+
+  const getItemLayout = useCallback((data: any, index: number) => ({
+    length: 120, // Approximate item height
+    offset: 120 * index,
+    index,
+  }), []);
+
+  const ListEmptyComponent = useMemo(() => (
+    <EmptyState
+      icon={FileText}
+      title="No Documents"
+      description="Add your first document to get started"
+      actionTitle="Add Document"
+      onAction={handleAddDocument}
+    />
+  ), [handleAddDocument]);
+
+  const HeaderRight = useMemo(() => (
+    <TouchableOpacity 
+      onPress={handleAddDocument}
+      style={styles.headerButton}
+    >
+      <Plus size={24} color={Colors.light.tint} />
+    </TouchableOpacity>
+  ), [handleAddDocument]);
 
   return (
     <View style={styles.container}>
       <Stack.Screen 
         options={{ 
           title: 'Documents',
-          headerRight: () => (
-            <TouchableOpacity 
-              onPress={() => triggerHaptic('selection')}
-              style={styles.headerButton}
-            >
-              <Plus size={24} color={Colors.light.tint} />
-            </TouchableOpacity>
-          )
+          headerRight: () => HeaderRight
         }} 
       />
       
-      <ScrollView 
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
+      <FlatList
+        data={documents}
+        renderItem={renderDocument}
+        keyExtractor={keyExtractor}
+        getItemLayout={getItemLayout}
+        contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
-      >
-        {documents.length === 0 ? (
-          <EmptyState
-            icon={FileText}
-            title="No Documents"
-            description="Add your first document to get started"
-            actionTitle="Add Document"
-            onAction={() => triggerHaptic('selection')}
-          />
-        ) : (
-          <View style={styles.documentsContainer}>
-            {documents.map(renderDocument)}
-          </View>
-        )}
-      </ScrollView>
+        removeClippedSubviews={true}
+        maxToRenderPerBatch={10}
+        windowSize={10}
+        initialNumToRender={5}
+        ListEmptyComponent={ListEmptyComponent}
+        ItemSeparatorComponent={() => <View style={styles.separator} />}
+      />
 
       <SignatureCapture
         visible={signDocumentModalVisible}
@@ -194,14 +240,12 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.light.background,
   },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
+  listContent: {
     padding: spacing.md,
+    flexGrow: 1,
   },
-  documentsContainer: {
-    gap: spacing.sm,
+  separator: {
+    height: spacing.sm,
   },
   documentCard: {
     padding: spacing.md,

@@ -1,5 +1,5 @@
-import React from 'react';
-import { TouchableOpacity, Text, StyleSheet, ActivityIndicator } from 'react-native';
+import React, { memo, useCallback } from 'react';
+import { TouchableOpacity, Text, StyleSheet, ActivityIndicator, ViewStyle, TextStyle } from 'react-native';
 import { Colors } from '@/constants/Colors';
 import { spacing, borderRadius } from '@/constants/design-system';
 import { useHaptics } from '@/hooks/useHaptics';
@@ -12,71 +12,81 @@ interface ButtonProps {
   disabled?: boolean;
   loading?: boolean;
   icon?: React.ReactNode;
+  fullWidth?: boolean;
+  style?: ViewStyle;
+  textStyle?: TextStyle;
+  haptic?: 'selection' | 'success' | 'warning' | 'error' | 'light' | 'medium' | 'heavy';
 }
 
-export function Button({ 
+export const Button = memo(({ 
   title, 
   onPress, 
   variant = 'primary', 
   size = 'medium',
   disabled = false,
   loading = false,
-  icon
-}: ButtonProps) {
+  icon,
+  fullWidth = false,
+  style,
+  textStyle,
+  haptic = 'selection'
+}: ButtonProps) => {
   const { triggerHaptic } = useHaptics();
 
-  const handlePress = () => {
+  const handlePress = useCallback(() => {
     if (!disabled && !loading) {
-      triggerHaptic('selection');
+      triggerHaptic(haptic);
       onPress();
     }
-  };
+  }, [disabled, loading, triggerHaptic, haptic, onPress]);
 
-  const getButtonStyle = () => {
-    const baseStyle = [styles.button, styles[size]];
-    
-    if (disabled || loading) {
-      baseStyle.push(styles.disabled);
-    } else {
-      baseStyle.push(styles[variant]);
-    }
-    
-    return baseStyle;
-  };
+  const buttonStyle = [
+    styles.button,
+    styles[size],
+    styles[variant],
+    fullWidth && styles.fullWidth,
+    (disabled || loading) && styles.disabled,
+    style,
+  ];
 
-  const getTextStyle = () => {
-    const baseStyle = [styles.text, styles[`${size}Text`]];
-    
-    if (disabled || loading) {
-      baseStyle.push(styles.disabledText);
-    } else {
-      baseStyle.push(styles[`${variant}Text`]);
-    }
-    
-    return baseStyle;
-  };
+  const textStyleCombined = [
+    styles.text,
+    styles[`${size}Text`],
+    styles[`${variant}Text`],
+    (disabled || loading) && styles.disabledText,
+    textStyle,
+  ];
+
+  const loadingColor = variant === 'primary' || variant === 'destructive' || variant === 'secondary' 
+    ? 'white' 
+    : Colors.light.tint;
 
   return (
     <TouchableOpacity
-      style={getButtonStyle()}
+      style={buttonStyle}
       onPress={handlePress}
       disabled={disabled || loading}
       activeOpacity={0.7}
+      accessibilityRole="button"
+      accessibilityState={{ disabled: disabled || loading }}
+      accessibilityLabel={title}
     >
       {loading ? (
         <ActivityIndicator 
           size="small" 
-          color={variant === 'primary' ? 'white' : Colors.light.tint} 
+          color={loadingColor}
         />
       ) : (
         <>
           {icon}
-          <Text style={getTextStyle()}>{title}</Text>
+          <Text style={textStyleCombined}>{title}</Text>
         </>
       )}
     </TouchableOpacity>
   );
-}
+});
+
+Button.displayName = 'Button';
 
 const styles = StyleSheet.create({
   button: {
@@ -85,6 +95,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderRadius: borderRadius.md,
     gap: spacing.xs,
+  },
+  
+  fullWidth: {
+    width: '100%',
   },
   
   // Sizes
@@ -107,21 +121,38 @@ const styles = StyleSheet.create({
   // Variants
   primary: {
     backgroundColor: Colors.light.tint,
+    shadowColor: Colors.light.tint,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
   },
   secondary: {
     backgroundColor: '#FFB17A',
+    shadowColor: '#FFB17A',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
   },
   outline: {
     backgroundColor: 'transparent',
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: Colors.light.tint,
   },
   destructive: {
     backgroundColor: '#F44336',
+    shadowColor: '#F44336',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
   },
   disabled: {
     backgroundColor: Colors.light.background,
     borderColor: Colors.light.background,
+    shadowOpacity: 0,
+    elevation: 0,
   },
   
   // Text styles

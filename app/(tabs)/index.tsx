@@ -1,5 +1,5 @@
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView, useWindowDimensions } from 'react-native';
+import React, { memo, useMemo, useCallback } from 'react';
+import { View, Text, StyleSheet, ScrollView, useWindowDimensions, Pressable } from 'react-native';
 import { Stack } from 'expo-router';
 import { Avatar } from '@/components/Avatar';
 import { Card } from '@/components/Card';
@@ -7,6 +7,7 @@ import { Colors } from '@/constants/Colors';
 import { spacing, borderRadius } from '@/constants/design-system';
 import { useAuthStore } from '@/hooks/useAuthStore';
 import { Bell, Calendar, FileText, DollarSign } from 'lucide-react-native';
+import { useHaptics } from '@/hooks/useHaptics';
 
 interface QuickAction {
   id: string;
@@ -47,31 +48,76 @@ const quickActions: QuickAction[] = [
   }
 ];
 
+// Memoized Quick Action Component
+const QuickActionCard = memo(({ action, onPress }: { action: QuickAction; onPress: (id: string) => void }) => {
+  const handlePress = useCallback(() => {
+    onPress(action.id);
+  }, [action.id, onPress]);
+
+  return (
+    <Pressable onPress={handlePress}>
+      <Card style={styles.quickActionCard}>
+        <View style={[styles.quickActionIcon, { backgroundColor: `${action.color}15` }]}>
+          <action.icon size={24} color={action.color} />
+        </View>
+        <Text style={styles.quickActionTitle}>{action.title}</Text>
+        {action.count && action.count > 0 && (
+          <View style={[styles.countBadge, { backgroundColor: action.color }]}>
+            <Text style={styles.countText}>{action.count}</Text>
+          </View>
+        )}
+      </Card>
+    </Pressable>
+  );
+});
+
+QuickActionCard.displayName = 'QuickActionCard';
+
+// Memoized Activity Item Component
+const ActivityItem = memo(({ icon: Icon, title, time, color }: {
+  icon: any;
+  title: string;
+  time: string;
+  color: string;
+}) => (
+  <View style={styles.activityItem}>
+    <View style={styles.activityIcon}>
+      <Icon size={20} color={color} />
+    </View>
+    <View style={styles.activityContent}>
+      <Text style={styles.activityTitle}>{title}</Text>
+      <Text style={styles.activityTime}>{time}</Text>
+    </View>
+  </View>
+));
+
+ActivityItem.displayName = 'ActivityItem';
+
 export default function HomeScreen() {
   const { width } = useWindowDimensions();
-  const isTablet = width >= 768;
   const { user } = useAuthStore();
+  const { triggerHaptic } = useHaptics();
 
-  const getGreeting = () => {
+  const isTablet = useMemo(() => width >= 768, [width]);
+
+  const greeting = useMemo(() => {
     const hour = new Date().getHours();
     if (hour < 12) return 'Good morning';
     if (hour < 18) return 'Good afternoon';
     return 'Good evening';
-  };
+  }, []);
 
-  const renderQuickAction = (action: QuickAction) => (
-    <Card key={action.id} style={styles.quickActionCard}>
-      <View style={[styles.quickActionIcon, { backgroundColor: `${action.color}15` }]}>
-        <action.icon size={24} color={action.color} />
-      </View>
-      <Text style={styles.quickActionTitle}>{action.title}</Text>
-      {action.count && action.count > 0 && (
-        <View style={[styles.countBadge, { backgroundColor: action.color }]}>
-          <Text style={styles.countText}>{action.count}</Text>
-        </View>
-      )}
-    </Card>
-  );
+  const userName = useMemo(() => {
+    return user?.displayName || user?.email || 'Welcome back';
+  }, [user?.displayName, user?.email]);
+
+  const handleQuickActionPress = useCallback((actionId: string) => {
+    triggerHaptic('selection');
+    // Handle navigation based on actionId
+    console.log('Quick action pressed:', actionId);
+  }, [triggerHaptic]);
+
+  const avatarSize = useMemo(() => isTablet ? "large" : "medium", [isTablet]);
 
   return (
     <View style={styles.container}>
@@ -86,19 +132,20 @@ export default function HomeScreen() {
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        removeClippedSubviews={true}
+        maxToRenderPerBatch={10}
+        windowSize={10}
       >
         {/* Header Section */}
         <View style={styles.header}>
           <View style={styles.userInfo}>
-            <Text style={styles.greeting}>{getGreeting()}</Text>
-            <Text style={styles.userName}>
-              {user?.displayName || user?.email || 'Welcome back'}
-            </Text>
+            <Text style={styles.greeting}>{greeting}</Text>
+            <Text style={styles.userName}>{userName}</Text>
           </View>
           <Avatar 
             source={user?.photoURL} 
-            name={user?.displayName || user?.email} 
-            size={isTablet ? "large" : "medium"} 
+            name={userName} 
+            size={avatarSize} 
           />
         </View>
 
@@ -109,7 +156,13 @@ export default function HomeScreen() {
             styles.quickActionsGrid,
             isTablet && styles.quickActionsGridTablet
           ]}>
-            {quickActions.map(renderQuickAction)}
+            {quickActions.map((action) => (
+              <QuickActionCard 
+                key={action.id} 
+                action={action} 
+                onPress={handleQuickActionPress}
+              />
+            ))}
           </View>
         </View>
 
@@ -117,35 +170,24 @@ export default function HomeScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Recent Activity</Text>
           <Card style={styles.activityCard}>
-            <View style={styles.activityItem}>
-              <View style={styles.activityIcon}>
-                <FileText size={20} color={Colors.light.tint} />
-              </View>
-              <View style={styles.activityContent}>
-                <Text style={styles.activityTitle}>Lease Agreement signed</Text>
-                <Text style={styles.activityTime}>2 hours ago</Text>
-              </View>
-            </View>
-            
-            <View style={styles.activityItem}>
-              <View style={styles.activityIcon}>
-                <DollarSign size={20} color="#FFB17A" />
-              </View>
-              <View style={styles.activityContent}>
-                <Text style={styles.activityTitle}>Utility bill added</Text>
-                <Text style={styles.activityTime}>1 day ago</Text>
-              </View>
-            </View>
-            
-            <View style={styles.activityItem}>
-              <View style={styles.activityIcon}>
-                <Calendar size={20} color="#4CAF50" />
-              </View>
-              <View style={styles.activityContent}>
-                <Text style={styles.activityTitle}>Cleaning task completed</Text>
-                <Text style={styles.activityTime}>2 days ago</Text>
-              </View>
-            </View>
+            <ActivityItem
+              icon={FileText}
+              title="Lease Agreement signed"
+              time="2 hours ago"
+              color={Colors.light.tint}
+            />
+            <ActivityItem
+              icon={DollarSign}
+              title="Utility bill added"
+              time="1 day ago"
+              color="#FFB17A"
+            />
+            <ActivityItem
+              icon={Calendar}
+              title="Cleaning task completed"
+              time="2 days ago"
+              color="#4CAF50"
+            />
           </Card>
         </View>
       </ScrollView>
