@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import { 
   View, 
   Text, 
@@ -8,7 +8,8 @@ import {
   TouchableOpacity,
   Modal,
   Alert,
-  useWindowDimensions
+  useWindowDimensions,
+  ListRenderItem
 } from 'react-native';
 import { colors } from '@/constants/Colors';
 import { spacing, typography, borderRadius, shadows } from '@/constants/design-system';
@@ -43,7 +44,7 @@ export default function ExpensesScreen() {
   const [category, setCategory] = useState('');
   const [description, setDescription] = useState('');
 
-  const handleAddExpense = async () => {
+  const handleAddExpense = useCallback(async () => {
     if (!title.trim() || !amount.trim() || !user || !apartmentId) {
       Alert.alert('Error', 'Please fill in all required fields');
       return;
@@ -91,9 +92,9 @@ export default function ExpensesScreen() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [title, amount, category, description, user, apartmentId, impact, notification, refetch]);
 
-  const handleDeleteExpense = async (expenseId: string) => {
+  const handleDeleteExpense = useCallback(async (expenseId: string) => {
     try {
       impact.heavy();
       notification.error();
@@ -112,17 +113,17 @@ export default function ExpensesScreen() {
       notification.error();
       Alert.alert('Error', error.message || 'Failed to delete expense');
     }
-  };
+  }, [impact, notification, refetch]);
 
-  const formatDate = (dateString: string) => {
+  const formatDate = useCallback((dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
       month: 'short',
       day: 'numeric',
       year: 'numeric'
     });
-  };
+  }, []);
 
-  const renderExpenseItem = ({ item }: { item: Expense }) => (
+  const renderExpenseItem: ListRenderItem<Expense> = useCallback(({ item }) => (
     <SwipeableRow
       onDelete={() => handleDeleteExpense(item.id)}
       deleteText="Delete"
@@ -170,11 +171,28 @@ export default function ExpensesScreen() {
         )}
       </Card>
     </SwipeableRow>
-  );
+  ), [handleDeleteExpense, isTablet, formatDate, user?.id]);
 
-  const totalExpenses = expenses.reduce((sum, expense) => sum + expense.amount, 0);
-  const pendingExpenses = expenses.filter(expense => !expense.settled);
-  const myExpenses = expenses.filter(expense => expense.paid_by === user?.id);
+  const summaryData = useMemo(() => {
+    const totalExpenses = expenses.reduce((sum, expense) => sum + expense.amount, 0);
+    const pendingExpenses = expenses.filter(expense => !expense.settled);
+    const myExpenses = expenses.filter(expense => expense.paid_by === user?.id);
+    const myTotal = myExpenses.reduce((sum, exp) => sum + exp.amount, 0);
+
+    return {
+      totalExpenses,
+      pendingCount: pendingExpenses.length,
+      myTotal
+    };
+  }, [expenses, user?.id]);
+
+  const keyExtractor = useCallback((item: Expense) => item.id, []);
+
+  const getItemLayout = useCallback((data: any, index: number) => ({
+    length: 140,
+    offset: 140 * index,
+    index,
+  }), []);
 
   return (
     <View style={styles.container}>
@@ -196,7 +214,7 @@ export default function ExpensesScreen() {
             Total Expenses
           </Text>
           <Text style={[styles.summaryValue, isTablet && styles.tabletSummaryValue]}>
-            ${totalExpenses.toFixed(2)}
+            ${summaryData.totalExpenses.toFixed(2)}
           </Text>
         </Card>
         
@@ -205,7 +223,7 @@ export default function ExpensesScreen() {
             Pending
           </Text>
           <Text style={[styles.summaryValue, { color: colors.warning }, isTablet && styles.tabletSummaryValue]}>
-            {pendingExpenses.length}
+            {summaryData.pendingCount}
           </Text>
         </Card>
         
@@ -214,7 +232,7 @@ export default function ExpensesScreen() {
             My Expenses
           </Text>
           <Text style={[styles.summaryValue, { color: colors.primary }, isTablet && styles.tabletSummaryValue]}>
-            ${myExpenses.reduce((sum, exp) => sum + exp.amount, 0).toFixed(2)}
+            ${summaryData.myTotal.toFixed(2)}
           </Text>
         </Card>
       </View>
@@ -222,8 +240,9 @@ export default function ExpensesScreen() {
       {expenses.length > 0 ? (
         <FlatList
           data={expenses}
-          keyExtractor={(item) => item.id}
+          keyExtractor={keyExtractor}
           renderItem={renderExpenseItem}
+          getItemLayout={getItemLayout}
           contentContainerStyle={[styles.expensesList, isTablet && styles.tabletExpensesList]}
           refreshControl={
             <RefreshControl refreshing={isLoading} onRefresh={refetch} />
@@ -231,6 +250,10 @@ export default function ExpensesScreen() {
           showsVerticalScrollIndicator={false}
           numColumns={isTablet ? 2 : 1}
           key={isTablet ? 'tablet' : 'phone'}
+          removeClippedSubviews={true}
+          maxToRenderPerBatch={10}
+          windowSize={10}
+          initialNumToRender={5}
         />
       ) : (
         <EmptyState

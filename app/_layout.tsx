@@ -3,12 +3,11 @@ import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect, ErrorBoundary } from 'react';
+import { useEffect } from 'react';
 import 'react-native-url-polyfill/auto';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { trpc, trpcClient } from '@/lib/trpc';
 import { View, Text, StyleSheet } from 'react-native';
-
 import { useColorScheme } from '@/hooks/useColorScheme';
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
@@ -36,7 +35,7 @@ const queryClient = new QueryClient({
 });
 
 // Error Boundary Component
-function ErrorFallback({ error, resetError }: { error: Error; resetError: () => void }) {
+function ErrorFallback({ error }: { error: Error }) {
   return (
     <View style={styles.errorContainer}>
       <Text style={styles.errorTitle}>Something went wrong</Text>
@@ -62,45 +61,43 @@ export default function RootLayout() {
   }
 
   return (
-    <ErrorBoundary fallback={ErrorFallback}>
-      <trpc.Provider client={trpcClient} queryClient={queryClient}>
-        <QueryClientProvider client={queryClient}>
-          <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-            <Stack screenOptions={{ headerShown: false }}>
-              <Stack.Screen name="(tabs)" />
-              <Stack.Screen name="(auth)" />
-              <Stack.Screen 
-                name="notifications" 
-                options={{ 
-                  headerShown: true,
-                  title: 'Notifications',
-                  headerStyle: { backgroundColor: '#FFFFFF' },
-                  headerTintColor: '#1A1A2E',
-                }} 
-              />
-              <Stack.Screen 
-                name="apartment-config" 
-                options={{ 
-                  headerShown: true,
-                  title: 'Apartment Setup',
-                  headerStyle: { backgroundColor: '#FFFFFF' },
-                  headerTintColor: '#1A1A2E',
-                }} 
-              />
-              <Stack.Screen 
-                name="modal" 
-                options={{ 
-                  presentation: 'modal',
-                  headerShown: true,
-                }} 
-              />
-              <Stack.Screen name="+not-found" />
-            </Stack>
-            <StatusBar style="auto" />
-          </ThemeProvider>
-        </QueryClientProvider>
-      </trpc.Provider>
-    </ErrorBoundary>
+    <trpc.Provider client={trpcClient} queryClient={queryClient}>
+      <QueryClientProvider client={queryClient}>
+        <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+          <Stack screenOptions={{ headerShown: false }}>
+            <Stack.Screen name="(tabs)" />
+            <Stack.Screen name="(auth)" />
+            <Stack.Screen 
+              name="notifications" 
+              options={{ 
+                headerShown: true,
+                title: 'Notifications',
+                headerStyle: { backgroundColor: '#FFFFFF' },
+                headerTintColor: '#1A1A2E',
+              }} 
+            />
+            <Stack.Screen 
+              name="apartment-config" 
+              options={{ 
+                headerShown: true,
+                title: 'Apartment Setup',
+                headerStyle: { backgroundColor: '#FFFFFF' },
+                headerTintColor: '#1A1A2E',
+              }} 
+            />
+            <Stack.Screen 
+              name="modal" 
+              options={{ 
+                presentation: 'modal',
+                headerShown: true,
+              }} 
+            />
+            <Stack.Screen name="+not-found" />
+          </Stack>
+          <StatusBar style="auto" />
+        </ThemeProvider>
+      </QueryClientProvider>
+    </trpc.Provider>
   );
 }
 

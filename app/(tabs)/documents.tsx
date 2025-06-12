@@ -177,7 +177,7 @@ export default function DocumentsScreen() {
   const keyExtractor = useCallback((item: Document) => item.id, []);
 
   const getItemLayout = useCallback((data: any, index: number) => ({
-    length: 120, // Approximate item height
+    length: 120,
     offset: 120 * index,
     index,
   }), []);

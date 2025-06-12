@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useCallback } from 'react';
 import { View, Text, StyleSheet, Modal, TouchableOpacity, Alert } from 'react-native';
 import { Colors } from '@/constants/Colors';
 import { spacing, borderRadius } from '@/constants/design-system';
@@ -22,12 +22,12 @@ export function SignatureCapture({
   const [hasSignature, setHasSignature] = useState(false);
   const { triggerHaptic } = useHaptics();
 
-  const handleClear = () => {
+  const handleClear = useCallback(() => {
     setHasSignature(false);
     triggerHaptic('selection');
-  };
+  }, [triggerHaptic]);
 
-  const handleSave = () => {
+  const handleSave = useCallback(() => {
     if (!hasSignature) {
       Alert.alert('No Signature', 'Please provide your signature before saving.');
       return;
@@ -37,9 +37,9 @@ export function SignatureCapture({
     const mockSignature = 'data:image/png;base64,signature_data_here';
     onSignatureComplete(mockSignature);
     triggerHaptic('success');
-  };
+  }, [hasSignature, onSignatureComplete, triggerHaptic]);
 
-  const handleClose = () => {
+  const handleClose = useCallback(() => {
     if (hasSignature) {
       Alert.alert(
         'Discard Signature',
@@ -59,13 +59,13 @@ export function SignatureCapture({
     } else {
       onClose();
     }
-  };
+  }, [hasSignature, onClose]);
 
   // Mock signature pad - in a real app, you'd use react-native-signature-canvas
-  const handleSignaturePadPress = () => {
+  const handleSignaturePadPress = useCallback(() => {
     setHasSignature(true);
     triggerHaptic('light');
-  };
+  }, [triggerHaptic]);
 
   return (
     <Modal

@@ -1,5 +1,5 @@
-import React, { ReactNode, useCallback, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Platform, Animated, PanResponder } from 'react-native';
+import React, { ReactNode, useCallback, useRef, useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Platform, Animated, PanResponder, Dimensions } from 'react-native';
 import { Colors } from '@/constants/Colors';
 import { spacing, borderRadius } from '@/constants/design-system';
 import { Trash2 } from 'lucide-react-native';
@@ -11,10 +11,14 @@ interface SwipeableRowProps {
   deleteText?: string;
 }
 
+const { width: screenWidth } = Dimensions.get('window');
+const DELETE_THRESHOLD = -80;
+const DELETE_WIDTH = 100;
+
 export function SwipeableRow({ children, onDelete, deleteText = "Delete" }: SwipeableRowProps) {
   const { triggerHaptic } = useHaptics();
   const translateX = useRef(new Animated.Value(0)).current;
-  const lastOffset = useRef(0);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // For web compatibility, render without swipe functionality
   if (Platform.OS === 'web') {
@@ -25,6 +29,7 @@ export function SwipeableRow({ children, onDelete, deleteText = "Delete" }: Swip
           <TouchableOpacity 
             style={styles.webDeleteButton}
             onPress={onDelete}
+            activeOpacity={0.7}
           >
             <Trash2 size={16} color="white" />
           </TouchableOpacity>
@@ -37,45 +42,54 @@ export function SwipeableRow({ children, onDelete, deleteText = "Delete" }: Swip
     Animated.spring(translateX, {
       toValue: 0,
       useNativeDriver: true,
-      tension: 100,
+      tension: 120,
       friction: 8,
     }).start();
-    lastOffset.current = 0;
+  }, [translateX]);
+
+  const animateToDelete = useCallback(() => {
+    Animated.spring(translateX, {
+      toValue: DELETE_THRESHOLD,
+      useNativeDriver: true,
+      tension: 120,
+      friction: 8,
+    }).start();
   }, [translateX]);
 
   const panResponder = useRef(
     PanResponder.create({
       onMoveShouldSetPanResponder: (evt, gestureState) => {
-        // Only respond to horizontal swipes
-        return Math.abs(gestureState.dx) > Math.abs(gestureState.dy) && Math.abs(gestureState.dx) > 10;
+        // Only respond to horizontal swipes with sufficient movement
+        const { dx, dy } = gestureState;
+        return Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 10;
       },
       onPanResponderGrant: () => {
-        translateX.setOffset(lastOffset.current);
-        translateX.setValue(0);
+        // Add haptic feedback when starting swipe
+        triggerHaptic('light');
       },
       onPanResponderMove: (evt, gestureState) => {
-        // Only allow left swipe (negative values)
-        const newValue = Math.min(0, gestureState.dx);
+        // Only allow left swipe (negative values) and limit the range
+        const newValue = Math.min(0, Math.max(gestureState.dx, -DELETE_WIDTH * 1.2));
         translateX.setValue(newValue);
       },
       onPanResponderRelease: (evt, gestureState) => {
-        translateX.flattenOffset();
-        const currentOffset = lastOffset.current + gestureState.dx;
+        const { dx, vx } = gestureState;
         
-        if (currentOffset < -100 && onDelete) {
-          // Trigger haptic feedback and delete
+        // Consider velocity for better UX
+        const shouldDelete = dx < DELETE_THRESHOLD || (dx < -40 && vx < -0.5);
+        
+        if (shouldDelete && onDelete && !isDeleting) {
+          setIsDeleting(true);
           triggerHaptic('error');
-          onDelete();
-          resetPosition();
-        } else if (currentOffset < -50) {
-          // Snap to delete position
-          Animated.spring(translateX, {
-            toValue: -100,
-            useNativeDriver: true,
-            tension: 100,
-            friction: 8,
-          }).start();
-          lastOffset.current = -100;
+          animateToDelete();
+          // Delay deletion to show animation
+          setTimeout(() => {
+            onDelete();
+            setIsDeleting(false);
+          }, 150);
+        } else if (dx < -30) {
+          // Snap to delete position for easy access
+          animateToDelete();
         } else {
           // Reset to original position
           resetPosition();
@@ -85,12 +99,14 @@ export function SwipeableRow({ children, onDelete, deleteText = "Delete" }: Swip
   ).current;
 
   const handleDeletePress = useCallback(() => {
-    if (onDelete) {
+    if (onDelete && !isDeleting) {
+      setIsDeleting(true);
       triggerHaptic('error');
       onDelete();
+      setIsDeleting(false);
       resetPosition();
     }
-  }, [onDelete, triggerHaptic, resetPosition]);
+  }, [onDelete, triggerHaptic, resetPosition, isDeleting]);
 
   return (
     <View style={styles.container}>
@@ -100,6 +116,7 @@ export function SwipeableRow({ children, onDelete, deleteText = "Delete" }: Swip
           style={styles.deleteAction}
           onPress={handleDeletePress}
           activeOpacity={0.7}
+          disabled={isDeleting}
         >
           <Trash2 size={20} color="white" />
           <Text style={styles.deleteText}>{deleteText}</Text>
@@ -126,13 +143,14 @@ const styles = StyleSheet.create({
   container: {
     position: 'relative',
     overflow: 'hidden',
+    borderRadius: borderRadius.md,
   },
   deleteBackground: {
     position: 'absolute',
     right: 0,
     top: 0,
     bottom: 0,
-    width: 100,
+    width: DELETE_WIDTH,
     backgroundColor: '#F44336',
     justifyContent: 'center',
     alignItems: 'center',
@@ -143,6 +161,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     width: '100%',
     height: '100%',
+    paddingHorizontal: spacing.sm,
   },
   deleteText: {
     color: 'white',

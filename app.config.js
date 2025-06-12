@@ -30,8 +30,7 @@ export default {
       bundler: "metro"
     },
     plugins: [
-      "expo-router",
-      "react-native-reanimated/plugin"
+      "expo-router"
     ],
     experiments: {
       typedRoutes: true
@@ -41,11 +40,9 @@ export default {
     updates: {
       enabled: false
     },
-    // Better development experience
     developer: {
       tool: "expo-cli"
     },
-    // Optimize for development
     packagerOpts: {
       config: "metro.config.js"
     }
