@@ -30,7 +30,8 @@ export default {
       bundler: "metro"
     },
     plugins: [
-      "expo-router"
+      "expo-router",
+      "react-native-reanimated/plugin"
     ],
     experiments: {
       typedRoutes: true
